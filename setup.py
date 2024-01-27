@@ -1,4 +1,5 @@
 import os
+import shutil
 from setuptools import setup, find_packages
 from setuptools.command.install import install
 
@@ -15,8 +16,8 @@ class CustomInstallCommand(install):
             if os.path.exists(file):
                 destination = file.replace('.example', '')
                 if not os.path.exists(destination):
-                    print(f"Creating {destination} from {file}")
-                    os.rename(file, destination)
+                    print(f"Copying {file} to {destination}")
+                    shutil.copy(file, destination)
                 else:
                     print(f"{destination} already exists, skipping.")
 
