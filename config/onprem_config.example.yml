@@ -1,0 +1,10 @@
+onprem_devices:
+  - name: "Device1"
+    ip_address: "192.168.1.1"
+    ipsec_settings:
+      # Specific IPSec settings for Device1
+  - name: "Device2"
+    ip_address: "192.168.2.1"
+    ipsec_settings:
+      # Specific IPSec settings for Device2
+  # Add more devices as needed

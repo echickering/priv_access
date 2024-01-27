@@ -1,0 +1,20 @@
+aws:
+  regions:
+    - us-east-1
+    - us-east-2
+  # Add other global AWS settings here if needed
+
+palo_alto:
+  panorama:
+    ip_address: "x.x.x.x"
+    api_key: "your-panorama-api-key"
+  ngfw_ami_id: "ami-xxxxxxxxxxxx"
+  # Other Palo Alto specific configurations
+
+vpn:
+  mesh_vpn_settings:
+    # Settings for full mesh VPN configuration
+
+ibgp:
+  routing_settings:
+    # Settings for iBGP configuration

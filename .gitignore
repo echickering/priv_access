@@ -1,3 +1,9 @@
+# Ignore all YAML files
+*.yml
+
+# Exclude example YAML files from being ignored
+!*.example.yml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
