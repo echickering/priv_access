@@ -1,4 +1,24 @@
+import os
 from setuptools import setup, find_packages
+from setuptools.command.install import install
+
+class CustomInstallCommand(install):
+    """Customized setuptools install command to copy configuration files."""
+    def run(self):
+        install.run(self)
+        config_files = [
+            'config/aws_credentials.example.yml',
+            'config/config.example.yml',
+            'config/onprem_config.example.yml',
+        ]
+        for file in config_files:
+            if os.path.exists(file):
+                destination = file.replace('.example', '')
+                if not os.path.exists(destination):
+                    print(f"Creating {destination} from {file}")
+                    os.rename(file, destination)
+                else:
+                    print(f"{destination} already exists, skipping.")
 
 setup(
     name='private-sase-project',
@@ -13,4 +33,7 @@ setup(
         'requests',
     ],
     python_requires='>=3.6',
+    cmdclass={
+        'install': CustomInstallCommand,
+    },
 )
