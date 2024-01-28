@@ -1,0 +1,17 @@
+priv_access/
+├── LICENSE
+├── README.md
+├── aws_manager/
+├── build
+├── config
+│   ├── aws_credentials.yml
+│   ├── config.yml
+│   └── vpc_template.yml
+├── panorama_manager
+├── private_sase_project.egg-info
+├── requirements.txt
+├── scripts
+│   └── deploy_vpc.py          # Boto3 script for deploying the VPC
+├── setup.py
+├── utils
+└── vpn_manager
