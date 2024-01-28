@@ -138,6 +138,32 @@ venv.bak/
 .spyderproject
 .spyproject
 
+#macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+Thumbs.db
+
+#Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+#Linux
+*~
+.directory
+.Trash-*
+.nfs*
+
+#Editors and IDEs
+*.swp, *.swo, *.swn (Vim temporary files)
+.idea/ (JetBrains IDEs like IntelliJ, PyCharm)
+.vscode/ (Visual Studio Code settings)
+*.sublime-* (Sublime Text files)
+.DS_Store (MacOS folder settings)
+
 # Rope project settings
 .ropeproject
 
