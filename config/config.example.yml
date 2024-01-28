@@ -3,6 +3,9 @@ aws:
     - us-east-1
     - us-east-2
   # Add other global AWS settings here if needed
+  vpc:
+    vpc_cidr: "x.x.x.x/x"
+    subnet_cidr_block: "x.x.x.x/x"
 
 palo_alto:
   panorama:
