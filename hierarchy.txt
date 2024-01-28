@@ -11,7 +11,7 @@ priv_access/
 ├── private_sase_project.egg-info
 ├── requirements.txt
 ├── scripts
-│   └── deploy_vpc.py          # Boto3 script for deploying the VPC
-├── setup.py
+│   └── __init__.py
+│   └── deploy_vpc.py
 ├── utils
 └── vpn_manager

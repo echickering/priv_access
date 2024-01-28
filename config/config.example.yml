@@ -1,11 +1,17 @@
 aws:
-  regions:
-    - us-east-1
-    - us-east-2
+  StackName: "PrivateAccess"
+  NamePrefix: "PPA-"
+  Regions:
+    us-east-2:
+      vpc_cidr: "10.18.240.0/23"
+      subnet1_cidr_block: "10.18.240.0/26"
+      subnet2_cidr_block: "10.18.240.64/26"
+    us-west-1:
+      vpc_cidr: "10.20.242.0/23"
+      subnet1_cidr_block: "10.20.242.0/26"
+      subnet2_cidr_block: "10.20.242.64/26"
+    # Add more regions as needed
   # Add other global AWS settings here if needed
-  vpc:
-    vpc_cidr: "x.x.x.x/x"
-    subnet_cidr_block: "x.x.x.x/x"
 
 palo_alto:
   panorama:
