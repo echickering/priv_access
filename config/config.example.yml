@@ -18,14 +18,14 @@ aws:
   EC2:
     instance_type: "m6g.xlarge"
     user_data: |
-      type=dhcp-client;
-      hostname={NamePrefix}-VM1;
-      auth-key={panorama_api_key};
-      panorama-server={panorama_ip_address1};
-      panorama-server-2={panorama_ip_address2};
-      tplname={PanoramaTemplate};
-      dgname={PanoramaDeviceGroup};
-      op-command-modes=jumbo-frame,mgmt-interface-swap;
+      type=dhcp-client
+      hostname={NamePrefix}-VM1
+      auth-key={panorama_api_key}
+      panorama-server={panorama_ip_address1}
+      panorama-server-2={panorama_ip_address2}
+      tplname={PanoramaTemplate}
+      dgname={PanoramaDeviceGroup}
+      op-command-modes=jumbo-frame,mgmt-interface-swap
       op-cmd-dpdk-pkt-io=on
 
 palo_alto:
