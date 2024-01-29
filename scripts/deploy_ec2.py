@@ -1,6 +1,7 @@
 import boto3
 import yaml
 import json
+import ipaddress
 import logging
 
 # Function to load configuration from YAML file
@@ -186,27 +187,47 @@ def main():
         network_interfaces = instance_info['Reservations'][0]['Instances'][0]['NetworkInterfaces']
         sorted_network_interfaces = sorted(network_interfaces, key=lambda ni: ni['Attachment']['DeviceIndex'])
 
-        # Create and associate Elastic IPs to the first two network interfaces (with indexes 0 and 1)
-        eip_alloc_ids = []
-        for ni in sorted_network_interfaces[:2]:
-            ni_id = ni['NetworkInterfaceId']
-            eip_alloc_id = create_elastic_ip(ec2_client)
-            associate_elastic_ip(ec2_client, eip_alloc_id, ni_id)
-            eip_alloc_ids.append(eip_alloc_id)
-
-        print(f"EC2 Instance created in {region}: {instance_id}")
-
         # Record the created resources in the state dictionary
         state[region] = state.get(region, {})
         state[region][instance_id] = {
             'vm_name': vm_name,
             'SecurityGroups': {'Public': sg_public_id, 'Private': sg_private_id},
-            'NetworkInterfaces': [
-                {'InterfaceId': ni['NetworkInterfaceId'], 'DeviceIndex': ni['Attachment']['DeviceIndex']} 
-                for ni in sorted_network_interfaces
-            ],
-            'ElasticIPs': eip_alloc_ids
+            'NetworkInterfaces': [],
+            'ElasticIPs': []
         }
+        # Create and associate Elastic IPs to the first two network interfaces (with indexes 0 and 1)
+        for ni in sorted_network_interfaces[:2]:
+            ni_id = ni['NetworkInterfaceId']
+            eip_alloc_id = create_elastic_ip(ec2_client)
+            associate_elastic_ip(ec2_client, eip_alloc_id, ni_id)
+            
+            # Get public IP for the EIP
+            eip_info = ec2_client.describe_addresses(AllocationIds=[eip_alloc_id])
+            public_ip = eip_info['Addresses'][0]['PublicIp']
+
+            state[region][instance_id]['ElasticIPs'].append({
+                'AllocationId': eip_alloc_id,
+                'InterfaceId': ni_id,
+                'PublicIP': public_ip
+            })
+        # Create additional state file information
+        for ni in sorted_network_interfaces:
+            subnet_info = ec2_client.describe_subnets(SubnetIds=[ni['SubnetId']])
+            subnet_cidr = subnet_info['Subnets'][0]['CidrBlock']
+            # Calculate Default Gateway (second IP in the subnet)
+            subnet_network = ipaddress.ip_network(subnet_cidr)
+            default_gw = str(next(subnet_network.hosts()))
+            # Calculate PrivateIpCidr
+            private_ip_cidr = f"{ni['PrivateIpAddress']}/{subnet_network.prefixlen}"
+            state[region][instance_id]['NetworkInterfaces'].append({
+                'InterfaceId': ni['NetworkInterfaceId'],
+                'DeviceIndex': ni['Attachment']['DeviceIndex'],
+                'PrivateIpAddress': ni['PrivateIpAddress'],
+                'DefaultGW': default_gw,
+                'PrivateIpCidr': private_ip_cidr
+            })
+        
+        print(f"EC2 Instance created in {region}: {instance_id}")
 
     # Write the state information to a file
     with open('./state/state-ec2.json', 'w') as f:

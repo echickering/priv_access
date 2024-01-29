@@ -17,9 +17,10 @@ def terminate_region_resources(region, instances, data):
 
             for instance_id in list(instances.keys()):
                 details = instances[instance_id]
-                # Disassociate and release Elastic IPs
-                for eip_alloc_id in details['ElasticIPs']:
+                # Release Elastic IPs
+                for eip in details['ElasticIPs']:
                     try:
+                        eip_alloc_id = eip['AllocationId']
                         ec2_client.release_address(AllocationId=eip_alloc_id)
                         print(f"Released Elastic IP: {eip_alloc_id} in {region}")
                     except ClientError as e:
