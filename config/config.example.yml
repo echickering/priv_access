@@ -37,11 +37,11 @@ aws:
 palo_alto:
   panorama:
     #update accordingly
-    ip_address1: "10.254.0.237"
-    ip_address2: "10.254.0.238"
-    api_key: "your-panorama-api-key"
-    PanoramaTemplate: "PPA-TPL-Stack"
-    PanoramaDeviceGroup: "PPA-DG"
+    ip_address1: 10.254.0.237
+    ip_address2: 10.254.0.238
+    api_key: your-panorama-sw-fw-license-key
+    PanoramaTemplate: PPA-TPL-Stack
+    PanoramaDeviceGroup: PPA-DG
 
 vpn:
   mesh_vpn_settings:
