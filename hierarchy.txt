@@ -13,6 +13,7 @@ priv_access/
 │   └── __init__.py
 │   └── deploy_vpc.py
 │   └── deploy_ec2.py
+│   └── destroy_ec2.py
 ├── state/
 │   └── __init__.py
 ├── utils/

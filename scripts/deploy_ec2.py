@@ -1,7 +1,7 @@
 import boto3
 import yaml
-import base64
 import json
+import logging
 
 # Function to load configuration from YAML file
 def load_config(file_path):
@@ -98,8 +98,6 @@ def deploy_ec2_instance(ec2_client, ami_id, instance_type, key_name, user_data, 
             'DeleteOnTermination': True
         }
         network_interfaces.append(network_interface)
-
-    print(f'EC2 UserData actually passed: {user_data}')
     # Launch the EC2 instance
     instance = ec2_client.run_instances(
         ImageId=ami_id,
@@ -149,8 +147,8 @@ def main():
         )
         # Convert user data to single line, semicolon-separated
         user_data_semi_colon_separated = user_data_formatted.replace('\n', ';').rstrip(';')
-        print(f'User-Data from config.yml: {user_data_formatted}')
-        print(f'User-Data after semicolon-separation: {user_data_semi_colon_separated}')
+        # print(f'User-Data from config.yml: {user_data_formatted}')
+        print(f'User-Data sent to EC2: {user_data_semi_colon_separated}')
 
         # Create Security Groups
         sg_public_id, sg_private_id = create_security_groups(ec2_client, region_outputs['VpcId'], config['aws']['NamePrefix'])
@@ -187,7 +185,6 @@ def main():
         instance_info = ec2_client.describe_instances(InstanceIds=[instance_id])
         network_interfaces = instance_info['Reservations'][0]['Instances'][0]['NetworkInterfaces']
         sorted_network_interfaces = sorted(network_interfaces, key=lambda ni: ni['Attachment']['DeviceIndex'])
-        print(f'Current network interfaces: {sorted_network_interfaces}')
 
         # Create and associate Elastic IPs to the first two network interfaces (with indexes 0 and 1)
         eip_alloc_ids = []
@@ -200,15 +197,19 @@ def main():
         print(f"EC2 Instance created in {region}: {instance_id}")
 
         # Record the created resources in the state dictionary
-        state[region] = {
+        state[region] = state.get(region, {})
+        state[region][instance_id] = {
+            'vm_name': vm_name,
             'SecurityGroups': {'Public': sg_public_id, 'Private': sg_private_id},
-            'EC2InstanceId': instance_id,
-            'NetworkInterfaces': [ni['NetworkInterfaceId'] for ni in sorted_network_interfaces],
+            'NetworkInterfaces': [
+                {'InterfaceId': ni['NetworkInterfaceId'], 'DeviceIndex': ni['Attachment']['DeviceIndex']} 
+                for ni in sorted_network_interfaces
+            ],
             'ElasticIPs': eip_alloc_ids
         }
 
     # Write the state information to a file
-    with open('./state/state.json', 'w') as f:
+    with open('./state/state-ec2.json', 'w') as f:
         json.dump(state, f, indent=4)
 
 if __name__ == '__main__':
