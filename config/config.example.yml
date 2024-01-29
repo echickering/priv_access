@@ -19,12 +19,12 @@ aws:
     instance_type: "m6g.xlarge"
     user_data: |
       type=dhcp-client;
-      hostname=${NamePrefix}-VM1;
-      auth-key=${palo_alto:panorama:api_key};
-      panorama-server=${palo_alto:panorama:ip_address1};
-      panorama-server-2=${palo_alto:panorama:ip_address2};
-      tplname=${PanoramaTemplate};
-      dgname=${PanoramaDeviceGroup};
+      hostname={NamePrefix}-VM1;
+      auth-key={panorama_api_key};
+      panorama-server={panorama_ip_address1};
+      panorama-server-2={panorama_ip_address2};
+      tplname={PanoramaTemplate};
+      dgname={PanoramaDeviceGroup};
       op-command-modes=jumbo-frame,mgmt-interface-swap;
       op-cmd-dpdk-pkt-io=on
 

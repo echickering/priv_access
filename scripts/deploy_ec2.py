@@ -1,6 +1,7 @@
 import boto3
 import yaml
 import base64
+import json
 
 # Function to load configuration from YAML file
 def load_config(file_path):
@@ -58,6 +59,22 @@ def associate_elastic_ip(ec2_client, allocation_id, network_interface_id):
 
 # Function to create and configure EC2 instances
 def deploy_ec2_instance(ec2_client, ami_id, instance_type, key_name, user_data, network_interfaces):
+    # Specify the block device mapping (EBS volumes)
+    block_device_mappings = [{
+        'DeviceName': '/dev/xvda1',  # Adjust this based on AMI default
+        'Ebs': {
+            'VolumeSize': 60,  # Size in GB
+            'VolumeType': 'gp3',
+            'Encrypted': True,
+            'DeleteOnTermination': True  # EBS volume is deleted on instance termination
+        },
+    }]
+
+    # Update each network interface to set DeleteOnTermination
+    for interface in network_interfaces:
+        interface.update({'DeleteOnTermination': True})
+
+    # Launch the EC2 instance
     instance = ec2_client.run_instances(
         ImageId=ami_id,
         InstanceType=instance_type,
@@ -65,26 +82,15 @@ def deploy_ec2_instance(ec2_client, ami_id, instance_type, key_name, user_data, 
         MaxCount=1,
         MinCount=1,
         UserData=user_data,
+        BlockDeviceMappings=block_device_mappings,
         NetworkInterfaces=network_interfaces,
-        BlockDeviceMappings=[
-            {
-                'DeviceName': '/dev/xvda1',
-                'Ebs': {
-                    'VolumeSize': 60,
-                    'VolumeType': 'gp3',
-                    'Encrypted': True
-                },
-            },
-        ],
-        MetadataOptions={
-            'HttpTokens': 'required',  # Enable IMDSv2
-        }
+        MetadataOptions={'HttpTokens': 'required'}
     )
     return instance['Instances'][0]['InstanceId']
 
-
 def main():
     config = load_config('./config/config.yml')
+    state = {}
 
     for region, region_config in config['aws']['Regions'].items():
         ec2_client = boto3.client('ec2', region_name=region)
@@ -94,6 +100,17 @@ def main():
         stack_name = config['aws']['StackName']
         region_outputs = get_cf_outputs(cf_client, stack_name)
 
+        # Prepare user_data by replacing placeholders
+        user_data_raw = config['aws']['EC2']['user_data'].format(
+            NamePrefix=config['aws']['NamePrefix'],
+            panorama_api_key=config['palo_alto']['panorama']['api_key'],
+            panorama_ip_address1=config['palo_alto']['panorama']['ip_address1'],
+            panorama_ip_address2=config['palo_alto']['panorama']['ip_address2'],
+            PanoramaTemplate=config['palo_alto']['panorama']['PanoramaTemplate'],
+            PanoramaDeviceGroup=config['palo_alto']['panorama']['PanoramaDeviceGroup']
+        )
+        user_data_encoded = base64.b64encode(user_data_raw.encode()).decode()
+        print(f'UserData: {user_data_encoded}')
         # Create Security Groups
         sg_public_id, sg_private_id = create_security_groups(ec2_client, region_outputs['VpcId'], config['aws']['NamePrefix'])
 
@@ -123,8 +140,19 @@ def main():
             [{'NetworkInterfaceId': ni1_id, 'DeviceIndex': 0},
              {'NetworkInterfaceId': ni2_id, 'DeviceIndex': 1},
              {'NetworkInterfaceId': ni3_id, 'DeviceIndex': 2}]
-        )
+        )       
         print(f"EC2 Instance created in {region}: {instance_id}")
+        # Record the created resources in the state dictionary
+        state[region] = {
+            'SecurityGroups': {'Public': sg_public_id, 'Private': sg_private_id},
+            'NetworkInterfaces': [ni1_id, ni2_id, ni3_id],
+            'ElasticIPs': [eip_alloc_id1, eip_alloc_id2],
+            'EC2InstanceId': instance_id
+        }
+
+    # Write the state information to a file
+    with open('./state/state.json', 'w') as f:
+        json.dump(state, f, indent=4)
 
 if __name__ == '__main__':
     main()
