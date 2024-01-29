@@ -28,6 +28,7 @@ def create_security_groups(ec2_client, vpc_id, name_prefix):
         GroupId=sg_public['GroupId'],
         IpPermissions=[
             {'IpProtocol': 'tcp', 'FromPort': 443, 'ToPort': 443, 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]},
+            {'IpProtocol': '-1', 'FromPort': 0, 'ToPort': 65535, 'IpRanges': [{'CidrIp': '108.44.161.0/24'}]},
             {'IpProtocol': 'udp', 'FromPort': 500, 'ToPort': 500, 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]},
             {'IpProtocol': 'udp', 'FromPort': 4500, 'ToPort': 4500, 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]},
             {'IpProtocol': 'udp', 'FromPort': 4501, 'ToPort': 4501, 'IpRanges': [{'CidrIp': '0.0.0.0/0'}]}
@@ -42,7 +43,7 @@ def create_security_groups(ec2_client, vpc_id, name_prefix):
     )
 
     # Add private security group rules (Allowing all RFC1918 traffic)
-    for cidr in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']:
+    for cidr in ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '108.44.161.0/24']:
         ec2_client.authorize_security_group_ingress(
             GroupId=sg_private['GroupId'],
             IpPermissions=[
@@ -97,6 +98,7 @@ def deploy_ec2_instance(ec2_client, ami_id, instance_type, key_name, user_data, 
         }
         network_interfaces.append(network_interface)
 
+    print(f'EC2 UserData actually passed: {user_data}')
     # Launch the EC2 instance
     instance = ec2_client.run_instances(
         ImageId=ami_id,
@@ -145,12 +147,9 @@ def main():
             PanoramaDeviceGroup=config['palo_alto']['panorama']['PanoramaDeviceGroup']
         )
         # Convert user data to single line, semicolon-separated
-        user_data_semi_colon_separated = user_data_formatted.replace('\n', ';')
-        print(f'User-Data Formated: {user_data_formatted}')
-        print(f'User-Data Resolved: {user_data_semi_colon_separated}')
-
-        # Base64 encode the user data
-        user_data_encoded = base64.b64encode(user_data_semi_colon_separated.encode()).decode()
+        user_data_semi_colon_separated = user_data_formatted.replace('\n', ';').rstrip(';')
+        print(f'User-Data from config.yml: {user_data_formatted}')
+        print(f'User-Data after semicolon-separation: {user_data_semi_colon_separated}')
 
         # Create Security Groups
         sg_public_id, sg_private_id = create_security_groups(ec2_client, region_outputs['VpcId'], config['aws']['NamePrefix'])
@@ -176,21 +175,23 @@ def main():
             ami_id,
             instance_type,
             key_name,
-            user_data_encoded,
+            user_data_semi_colon_separated,
             network_interfaces_config,
             vm_name
         )
         # Wait for instance to be in running state (optional)
         ec2_client.get_waiter('instance_running').wait(InstanceIds=[instance_id])
 
-        # Create and associate Elastic IPs to the first two network interfaces
+        # Retrieve network interfaces and sort them by device index
         instance_info = ec2_client.describe_instances(InstanceIds=[instance_id])
-        network_interface_ids = [
-            ni['NetworkInterfaceId'] for ni in instance_info['Reservations'][0]['Instances'][0]['NetworkInterfaces']
-        ]
+        network_interfaces = instance_info['Reservations'][0]['Instances'][0]['NetworkInterfaces']
+        sorted_network_interfaces = sorted(network_interfaces, key=lambda ni: ni['Attachment']['DeviceIndex'])
+        print(f'Current network interfaces: {sorted_network_interfaces}')
 
+        # Create and associate Elastic IPs to the first two network interfaces (with indexes 0 and 1)
         eip_alloc_ids = []
-        for ni_id in network_interface_ids[:2]:  # Limit to the first two interfaces
+        for ni in sorted_network_interfaces[:2]:
+            ni_id = ni['NetworkInterfaceId']
             eip_alloc_id = create_elastic_ip(ec2_client)
             associate_elastic_ip(ec2_client, eip_alloc_id, ni_id)
             eip_alloc_ids.append(eip_alloc_id)
@@ -201,7 +202,7 @@ def main():
         state[region] = {
             'SecurityGroups': {'Public': sg_public_id, 'Private': sg_private_id},
             'EC2InstanceId': instance_id,
-            'NetworkInterfaces': network_interface_ids,  # Add network interface IDs
+            'NetworkInterfaces': [ni['NetworkInterfaceId'] for ni in sorted_network_interfaces],
             'ElasticIPs': eip_alloc_ids
         }
 

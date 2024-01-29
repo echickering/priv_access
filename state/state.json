@@ -1,1 +1,34 @@
-{}
+{
+    "us-east-2": {
+        "SecurityGroups": {
+            "Public": "sg-0e69c240e3be11ddb",
+            "Private": "sg-093dfbc42792a816e"
+        },
+        "EC2InstanceId": "i-025e99f9c9af9444d",
+        "NetworkInterfaces": [
+            "eni-04ab5e34e00e23982",
+            "eni-098c5372e5a2dbc9f",
+            "eni-0263a4271cd542f7e"
+        ],
+        "ElasticIPs": [
+            "eipalloc-07f870433b98cfeaf",
+            "eipalloc-097b814909ae4ec72"
+        ]
+    },
+    "us-west-1": {
+        "SecurityGroups": {
+            "Public": "sg-030457e7a5e0ab5a7",
+            "Private": "sg-0afc1e1a1d0937eae"
+        },
+        "EC2InstanceId": "i-0f7ddfea34b0f8686",
+        "NetworkInterfaces": [
+            "eni-05ec36beac628848a",
+            "eni-05cff0d6bc20a22ff",
+            "eni-02966125367bfaef1"
+        ],
+        "ElasticIPs": [
+            "eipalloc-0c8602327b2d9c68a",
+            "eipalloc-0208bcf86f7ae4260"
+        ]
+    }
+}
