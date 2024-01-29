@@ -1,17 +1,21 @@
 priv_access/
 ├── LICENSE
 ├── README.md
-├── aws_manager/
-├── build
-├── config
+├── requirements.txt
+├── config/
 │   ├── aws_credentials.yml
 │   ├── config.yml
+│   ├── onprem_config.yml
 │   └── vpc_template.yml
-├── panorama_manager
-├── private_sase_project.egg-info
-├── requirements.txt
-├── scripts
+├── panorama_manager/
+│   └── __init__.py
+├── scripts/
 │   └── __init__.py
 │   └── deploy_vpc.py
-├── utils
-└── vpn_manager
+│   └── deploy_ec2.py
+├── state/
+│   └── __init__.py
+├── utils/
+│   └── __init__.py
+└── vpn_manager/
+│   └── __init__.py
