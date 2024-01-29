@@ -6,19 +6,35 @@ aws:
       vpc_cidr: "10.18.240.0/23"
       subnet1_cidr_block: "10.18.240.0/26"
       subnet2_cidr_block: "10.18.240.64/26"
+      ngfw_ami_id: "ami-074413e137fc5826c"
+      key_name: "us-east2"
     us-west-1:
       vpc_cidr: "10.20.242.0/23"
       subnet1_cidr_block: "10.20.242.0/26"
       subnet2_cidr_block: "10.20.242.64/26"
+      ngfw_ami_id: "ami-01b6650ae9be2b4f9"
+      key_name: "us-west1"
     # Add more regions as needed
-  # Add other global AWS settings here if needed
+  EC2:
+    instance_type: "m6g.xlarge"
+    user_data: |
+      type=dhcp-client;
+      hostname=${NamePrefix}-VM1;
+      auth-key=${palo_alto:panorama:api_key};
+      panorama-server=${palo_alto:panorama:ip_address1};
+      panorama-server-2=${palo_alto:panorama:ip_address2};
+      tplname=${PanoramaTemplate};
+      dgname=${PanoramaDeviceGroup};
+      op-command-modes=jumbo-frame,mgmt-interface-swap;
+      op-cmd-dpdk-pkt-io=on
 
 palo_alto:
   panorama:
-    ip_address: "x.x.x.x"
+    ip_address1: "10.254.0.237"
+    ip_address2: "10.254.0.238"
     api_key: "your-panorama-api-key"
-  ngfw_ami_id: "ami-xxxxxxxxxxxx"
-  # Other Palo Alto specific configurations
+    PanoramaTemplate: "PPA-TPL-Stack"
+    PanoramaDeviceGroup: "PPA-DG"
 
 vpn:
   mesh_vpn_settings:
