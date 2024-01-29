@@ -1,34 +1,34 @@
 {
     "us-east-2": {
         "SecurityGroups": {
-            "Public": "sg-0e69c240e3be11ddb",
-            "Private": "sg-093dfbc42792a816e"
+            "Public": "sg-013c4b75c3d5ed5d6",
+            "Private": "sg-09af036974d78ace3"
         },
-        "EC2InstanceId": "i-025e99f9c9af9444d",
+        "EC2InstanceId": "i-0d5a02066e561d7d2",
         "NetworkInterfaces": [
-            "eni-04ab5e34e00e23982",
-            "eni-098c5372e5a2dbc9f",
-            "eni-0263a4271cd542f7e"
+            "eni-004bf7e7dd9c7ff90",
+            "eni-098ba037602803ecb",
+            "eni-0493d0ff67fd8ec46"
         ],
         "ElasticIPs": [
-            "eipalloc-07f870433b98cfeaf",
-            "eipalloc-097b814909ae4ec72"
+            "eipalloc-0dfcec67d067bfe4c",
+            "eipalloc-025ed469dfb378f8b"
         ]
     },
     "us-west-1": {
         "SecurityGroups": {
-            "Public": "sg-030457e7a5e0ab5a7",
-            "Private": "sg-0afc1e1a1d0937eae"
+            "Public": "sg-0084e05bbc2a529ba",
+            "Private": "sg-0da651aa372b9d57d"
         },
-        "EC2InstanceId": "i-0f7ddfea34b0f8686",
+        "EC2InstanceId": "i-0a2a3b695ce1487f2",
         "NetworkInterfaces": [
-            "eni-05ec36beac628848a",
-            "eni-05cff0d6bc20a22ff",
-            "eni-02966125367bfaef1"
+            "eni-0525c831244a26954",
+            "eni-02e8cc116c42d2e51",
+            "eni-0b95626a6ded37814"
         ],
         "ElasticIPs": [
-            "eipalloc-0c8602327b2d9c68a",
-            "eipalloc-0208bcf86f7ae4260"
+            "eipalloc-0ab02347e98e14b73",
+            "eipalloc-05b48859fb7bd5217"
         ]
     }
 }

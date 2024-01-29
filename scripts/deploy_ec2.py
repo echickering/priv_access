@@ -71,6 +71,7 @@ def create_elastic_ip(ec2_client):
 def associate_elastic_ip(ec2_client, allocation_id, network_interface_id):
     ec2_client.associate_address(
         AllocationId=allocation_id,
+        AllowReassociation= False,
         NetworkInterfaceId=network_interface_id
     )
 
@@ -139,7 +140,7 @@ def main():
 
         # Prepare user_data with actual values
         user_data_formatted = config['aws']['EC2']['user_data'].format(
-            NamePrefix=config['aws']['NamePrefix'] + f"VM{vm_count[region]}",
+            NamePrefix=config['aws']['NamePrefix'] + region + f"-VM{vm_count[region]}",
             panorama_api_key=config['palo_alto']['panorama']['api_key'],
             panorama_ip_address1=config['palo_alto']['panorama']['ip_address1'],
             panorama_ip_address2=config['palo_alto']['panorama']['ip_address2'],
