@@ -2,6 +2,9 @@ priv_access/
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
+├── api/
+│   └── __init__.py
+│   └── palo_token.py
 ├── config/
 │   ├── aws_credentials.yml
 │   ├── config.yml
@@ -14,9 +17,11 @@ priv_access/
 │   └── deploy_vpc.py
 │   └── deploy_ec2.py
 │   └── destroy_ec2.py
+│   └── update_panorama.py
 ├── state/
 │   └── __init__.py
 ├── utils/
 │   └── __init__.py
 └── vpn_manager/
 │   └── __init__.py
+├── setup.py

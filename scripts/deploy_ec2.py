@@ -167,7 +167,7 @@ def main():
         key_name = region_config['key_name']
         
         # Define VM name
-        vm_name = f"{config['aws']['NamePrefix']}VM{vm_count[region]}"
+        vm_name = f"{config['aws']['NamePrefix']}{region}-VM{vm_count[region]}"
 
         # Deploy EC2 instance
         instance_id = deploy_ec2_instance(
