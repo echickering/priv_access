@@ -18,6 +18,7 @@ __pycache__/
 # Python scripts to ignore
 find_xpath.py
 running-config.xml
+config.xml
 
 # Distribution / packaging
 .Python
