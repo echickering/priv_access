@@ -68,9 +68,9 @@ palo_alto:
 
 #### AWS Credentials
 - **aws_credentials**: In config/aws_credentials set:
-  - **access_key_id**: Define the CloudFormation template stack name.
-  - **secret_access_key**: Set a prefix for naming AWS resources.
-  - **default_region**: Specify the AWS regions and their corresponding settings.
+  - **access_key_id**: Define access_key_id
+  - **secret_access_key**: Define secret_access_key
+  - **default_region**: Define default_region.
 
 #### Panorma Credentials
 - **pan_credentials**: In config/pan_credentials set:
