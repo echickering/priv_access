@@ -1,4 +1,9 @@
 aws:
+  Tags:  # Add a Tags section here
+    Project: "YourProjectName"
+    Environment: "Production"
+    Owner: "YourName"
+    AdditionalTag: "Value"
   #Update StackName to what you'd like as this is the CFT that deploys the VPC
   StackName: "PrivateAccess"
   #Update NamePrefix as all items will have this as its prefix for naming convention

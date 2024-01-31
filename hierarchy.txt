@@ -5,17 +5,19 @@ priv_access/
 ├── api/
 │   └── __init__.py
 │   └── palo_token.py
+├── aws/
+│   └── __init__.py
 ├── config/
 │   ├── aws_credentials.yml
 │   ├── config.yml
 │   ├── onprem_config.yml
 │   └── vpc_template.yml
-├── panorama_manager/
+├── panorama/
 │   └── __init__.py
 ├── scripts/
 │   └── __init__.py
-│   └── deploy_vpc.py
 │   └── deploy_ec2.py
+│   └── deploy_vpc.py
 │   └── destroy_ec2.py
 │   └── update_panorama.py
 ├── state/
@@ -24,4 +26,5 @@ priv_access/
 │   └── __init__.py
 └── vpn_manager/
 │   └── __init__.py
+├── main.py
 ├── setup.py

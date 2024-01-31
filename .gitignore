@@ -17,6 +17,8 @@ __pycache__/
 
 # Python scripts to ignore
 find_xpath.py
+deploy_vpc2.py
+ec2_deployer.py
 running-config.xml
 config.xml
 
