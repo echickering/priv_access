@@ -67,13 +67,13 @@ palo_alto:
 ### Step 4: Credentials
 
 #### AWS Credentials
-- **aws_credentials**: In config/aws_credentials set:
+- **config/aws_credentials.yml**: In config/aws_credentials.yml set:
   - **access_key_id**: Define access_key_id
   - **secret_access_key**: Define secret_access_key
   - **default_region**: Define default_region.
 
 #### Panorma Credentials
-- **pan_credentials**: In config/pan_credentials set:
+- **config/pan_credential.ymls**: In config/pan_credentials.yml set:
   - **palo_alto_ngfw_url**: Enter the IP or FQDN of Panorama Appliance.
   - **palo_alto_password**: Enter your API Service Account Password(if desired, if not set API-Key)
   - **palo_alto_username**: Enter your API Service Account Username(if desired, if not set API-Key)
