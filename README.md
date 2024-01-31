@@ -75,6 +75,6 @@ palo_alto:
 #### Panorma Credentials
 - **pan_credentials**: In config/pan_credentials set:
   - **palo_alto_ngfw_url**: Enter the IP or FQDN of Panorama Appliance.
-  - **palo_alto_password**: Enter your API Service Account Password(if desired, if not set API-Key)
-  - **palo_alto_username**: Enter your API Service Account Username(if desired, if not set API-Key)
+  - **palo_alto_password**: Enter your API Service Account Password('if desired, if not set API-Key')
+  - **palo_alto_username**: Enter your API Service Account Username('if desired, if not set API-Key')
   - **palo_alto_username**: Enter your API KEY (If you don't have it, either obtain your enter credentials above)
