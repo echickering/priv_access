@@ -18,7 +18,7 @@ python setup.py install
 
 ### Step 3: Configuration
 
-Configuring `config.yml`
+Configuring `config/config.yml`
 
 After installation, a template configuration file (`config.example.yml`) is automatically copied to `config.yml`. You need to update `config.yml` with your specific settings.
 
