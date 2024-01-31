@@ -35,11 +35,11 @@ After installation, a template configuration file (`config.example.yml`) is auto
 - **EC2 Data**: Specify instance Type and user_data(for bootstrapping.)
   - **instance_type**: Current implementation all VMs are on same instance type. Verify instance type you choose is available in all regions
   - **user_data**: set appropriate user data. Do not modify anything contained within { } as they are placeholders from EC2 deployment script(and pulled from palo_alto key)
-**palo_alto** Panorama SW_FW_LICENSE plugin specifics
-- **ip_address1 and ip_address2**: Specify the IP addresses of your Primary and Secondary Panorama instances.
-- **auth_key**: Enter the AUTH key for the Panorama SW_FW_LICENSE plugin.
-- **PanoramaTemplate**: Specify the template stack associated with GlobalProtect.
-- **PanoramaDeviceGroup**: Define the device group that your VMs will attach to for policy configuration.
+-**palo_alto** Panorama SW_FW_LICENSE plugin specifics
+  - **ip_address1 and ip_address2**: Specify the IP addresses of your Primary and Secondary Panorama instances.
+  - **auth_key**: Enter the AUTH key for the Panorama SW_FW_LICENSE plugin.
+  - **PanoramaTemplate**: Specify the template stack associated with GlobalProtect.
+  - **PanoramaDeviceGroup**: Define the device group that your VMs will attach to for policy configuration.
 
 ### Example config.yml
 ```yaml
