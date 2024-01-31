@@ -26,8 +26,8 @@ After installation, a template configuration file (`config.example.yml`) is auto
 - **NamePrefix**: Set a prefix for naming AWS resources.
 - **Regions**: Specify the AWS regions and their corresponding settings.
   - **VPC Cidr**: Define the CIDR block for the VPC.
-  - **subnet1_cidr_block**: Set the CIDR block for the first subnet.
-  - **subnet2_cidr_block**: Set the CIDR block for the second subnet.
+  - **subnet1_cidr_block**: Set the CIDR block for the untrust subnet.
+  - **subnet2_cidr_block**: Set the CIDR block for the trust subnet.
   - **ngfw_ami_id**: Specify the AWS AMI ID for the NGFW in each region.
   - **key_name**: Provide the SSH key name for accessing VMs in each region.
 
@@ -57,7 +57,7 @@ aws:
 palo_alto:
   ip_address1: '192.0.2.1'
   ip_address2: '192.0.2.2'
-  api_key: 'your-api-key'
+  api_key: 'your-api-key' #SW_FW_LICENSE Plugin authkey
   PanoramaTemplate: 'YourTemplateStack'
   PanoramaDeviceGroup: 'YourDeviceGroup'
 ```
