@@ -1,4 +1,4 @@
-#### Welcome
+## Welcome
 - **Purpose** This project purpose is to create your own GlobalProtect automated solution on AWS(currently)
 - **Assumptions** You have a Panorama, a Template and Template Stack with All Network Interface, Routing and GlobalProtect settings set with Variables, SSL certificates set on Template
 
