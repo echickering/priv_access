@@ -71,8 +71,8 @@ aws:
       plugin-op-commands=panorama-licensing-mode-on
       op-command-modes=jumbo-frame,mgmt-interface-swap
       op-cmd-dpdk-pkt-io=on
-      vm-series-auto-registration-pin-id=962e14cc-4305-4618-a63a-c33d3346c467
-      vm-series-auto-registration-pin-value=312cd70318354d1e8d4472e96f16546a
+      vm-series-auto-registration-pin-id=962c24cc-4305-4618-a63a-c33d3346c467
+      vm-series-auto-registration-pin-value=312ce80318354d1e8d4472e96f16546a
 palo_alto:
   ip_address1: '192.0.2.1'
   ip_address2: '192.0.2.2'
