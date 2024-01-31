@@ -35,7 +35,7 @@ After installation, a template configuration file (`config.example.yml`) is auto
 
 #### Palo Alto Configuration
 - **ip_address1 and ip_address2**: Specify the IP addresses of your Primary and Secondary Panorama instances.
-- **api_key**: Enter the AUTH key for the Panorama SW_FW_LICENSE plugin.
+- **auth_key**: Enter the AUTH key for the Panorama SW_FW_LICENSE plugin.
 - **PanoramaTemplate**: Specify the template stack associated with GlobalProtect.
 - **PanoramaDeviceGroup**: Define the device group that your VMs will attach to for policy configuration.
 
@@ -59,7 +59,7 @@ aws:
 palo_alto:
   ip_address1: '192.0.2.1'
   ip_address2: '192.0.2.2'
-  api_key: 'your-auth-key' #AUTH key for the Panorama SW_FW_LICENSE plugin.
+  auth_key: 'your-auth-key' #AUTH key for the Panorama SW_FW_LICENSE plugin.
   PanoramaTemplate: 'YourTemplateStack'
   PanoramaDeviceGroup: 'YourDeviceGroup'
 ```

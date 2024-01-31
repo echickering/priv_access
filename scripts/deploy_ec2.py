@@ -198,7 +198,7 @@ class EC2Deployer:
         # Prepare user_data with actual values
         user_data_formatted = self.config['aws']['EC2']['user_data'].format(
             NamePrefix=self.config['aws']['NamePrefix'] + region + f"-VM{self.vm_count[region]}",
-            panorama_api_key=self.config['palo_alto']['panorama']['api_key'],
+            panorama_auth_key=self.config['palo_alto']['panorama']['auth_key'],
             panorama_ip_address1=self.config['palo_alto']['panorama']['ip_address1'],
             panorama_ip_address2=self.config['palo_alto']['panorama']['ip_address2'],
             PanoramaTemplate=self.config['palo_alto']['panorama']['PanoramaTemplate'],
