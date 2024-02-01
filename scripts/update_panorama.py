@@ -4,10 +4,12 @@ import xml.etree.ElementTree as ET
 import urllib3
 import logging
 import time
+import json
 
 class UpdatePanorama:
-    def __init__(self, stack_name, token, base_url, state_data):
+    def __init__(self, stack_name, dg_name, token, base_url, state_data):
         self.stack_name = stack_name
+        self.dg_name = dg_name
         self.token = token
         self.base_url = base_url
         self.state_data = state_data
@@ -62,6 +64,7 @@ class UpdatePanorama:
                     for region, instances in self.state_data.items():
                         for instance_id, instance_details in instances.items():
                             if instance_details['vm_name'] == hostname:
+                                instance_details['serial'] = serial
                                 logger.info(f"Found matching VM: {hostname}")
 
                                 trust_ip = None
@@ -98,15 +101,17 @@ class UpdatePanorama:
                                 logger.info(f"Variables updated for VM: {hostname}")
                                 processed_devices.add(hostname)  # Add hostname to processed_devices
 
-            if state_devices.issubset(processed_devices):
+            if processed_devices == state_devices:
+                logger.info("All devices from state data have been processed.")
                 break  # Exit if all devices in state_data are processed
 
-            logger.info(f"Waiting for more devices. Retrying in {delay} seconds...")
-            time.sleep(delay)
+            if attempt < max_retries - 1:
+                logger.info(f"Waiting for more devices to register. Retrying in {delay} seconds\nAttempt: {attempt} of max attempt:{max_retries}...")
+                time.sleep(delay)
 
-        if not state_devices.issubset(processed_devices):
-            logger.error("Not all devices from state_data were processed.")
-
+        if processed_devices != state_devices:
+            logger.error("Not all devices from state data were processed.")
+            # Additional logic for unprocessed devices can be added here
 
     def update_variable(self, serial, variable_name, value, logger):
         # XPath
@@ -129,7 +134,7 @@ class UpdatePanorama:
 
         # Make the request and log the response
         response = requests.post(self.base_url, params=payload, verify=False)
-        logger.info(f"Response from Panorama:\n{response.text}")
+        logger.debug(f"Response from Panorama:\n{response.text}")
     
     def commit_panorama(self, logger):
         payload = {
@@ -149,9 +154,11 @@ class UpdatePanorama:
         payload = {
             'type': 'commit',
             'action': 'all',
-            'cmd': f'<commit-all><template-stack><name>{self.stack_name}</name></template-stack></commit-all>',
+            # 'cmd': f'<commit-all><template-stack><name>{self.stack_name}</name></template-stack></commit-all>',
+            'cmd': f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>',
             'key': self.token
         }
+        logger.info(f'Payload for commit_all: {payload}')
         response = requests.post(self.base_url, params=payload, verify=False)
         logger.info(f"Response from commit-all operation:\n{response.text}")
 
@@ -185,6 +192,11 @@ class UpdatePanorama:
 
         logger.error(f"Maximum retries reached for commit job {job_id} status check.")
         return False
+
+
+    def write_state_to_file(self, file_path='./state/state-ec2.json'):
+        with open(file_path, 'w') as f:
+            json.dump(self.state_data, f, indent=4)
 
     def update_panorama(self):
         # Disable SSL warnings

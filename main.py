@@ -63,7 +63,7 @@ def main():
         # Deploy VMs only in new regions
         for region in new_regions:
             logging.info(f'New Region or VM count increased, deploying VM in {region}')
-            ec2_deployer.setup_clients(region)
+            # ec2_deployer.setup_region_session(region)
             ec2_deployer.deploy_region(region)
     else:
         # Log that no new regions or VMs need creating
@@ -76,12 +76,17 @@ def main():
 
     #Obtain the Panorama TemplateStack information
     stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
+    dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
 
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(stack_name, token, base_url, state_data)
+    updater = UpdatePanorama(stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
 
+    return updater
+
 if __name__ == '__main__':
-    main()
+    updater = main()
+    if updater:  # Check if updater is not None
+        updater.write_state_to_file()

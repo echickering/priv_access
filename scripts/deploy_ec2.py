@@ -191,6 +191,7 @@ class EC2Deployer:
 
         # Get CloudFormation outputs for the region
         region_outputs = self.get_cf_outputs(self.config['aws']['StackName'])
+        logging.info(f'Current region_outputs: {region_outputs}')
 
         # Increment VM count for the region
         self.vm_count[region] = self.vm_count.get(region, 0) + 1

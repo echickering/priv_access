@@ -1,7 +1,6 @@
 import boto3
 import yaml
 import logging
-import threading
 
 class VPCDeployer:
     def __init__(self, config, aws_credentials):
@@ -91,6 +90,10 @@ class VPCDeployer:
                 {
                     'ParameterKey': 'VpcName',
                     'ParameterValue': vpc_name
+                },
+                {
+                    'ParameterKey': 'AvailabilityZone',
+                    'ParameterValue': region_config['availability_zone']  # Ensure this is defined in your config
                 },
                 {
                     'ParameterKey': 'VpcCidr',

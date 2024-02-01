@@ -1,6 +1,6 @@
 ## Welcome
-- **Purpose:** This project purpose is to create your own GlobalProtect automated solution on AWS(currently)
-- **Assumptions:** You have a Panorama, a Template and Template Stack with All Network Interface, Routing, and GlobalProtect settings set with Variables.. As of now, SSL certificates are manually managed on Template
+- **Purpose:** Create your own GlobalProtect automated solution on AWS(currently)
+- **Assumptions:** You have a Panorama, configured Template and Template Stack with All Network Interface, Routing, and GlobalProtect settings set with Variables.. As of now, SSL certificates are manually managed on Template
 
 ### Step 1: Clone the Repository
 
