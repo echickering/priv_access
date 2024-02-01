@@ -27,6 +27,7 @@ After installation, a template configuration file (`config.example.yml`) is auto
 - **StackName**: Define the CloudFormation template stack name.
 - **NamePrefix**: Set a prefix for naming AWS resources.
 - **Regions**: Specify the AWS regions and their corresponding settings.
+  - **availability_zone**: Availability zone subnets will be deployed in.
   - **VPC Cidr**: Define the CIDR block for the VPC.
   - **subnet1_cidr_block**: Set the CIDR block for the untrust subnet.
   - **subnet2_cidr_block**: Set the CIDR block for the trust subnet.
