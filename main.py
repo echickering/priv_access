@@ -2,11 +2,11 @@
 import json
 import logging
 import yaml
-from logging.handlers import TimedRotatingFileHandler  # For log rotation
+from logging.handlers import TimedRotatingFileHandler
 from api.palo_token import PaloToken
-from scripts.update_panorama import UpdatePanorama
-from scripts.deploy_vpc import VPCDeployer  # Import the VPCDeployer class
-from scripts.deploy_ec2 import EC2Deployer
+from panorama.update_panorama import UpdatePanorama
+from aws.deploy_vpc import VPCDeployer
+from aws.deploy_ec2 import EC2Deployer
 
 def setup_logging():
     # Create a logger
@@ -77,7 +77,11 @@ def main():
     #Obtain the Panorama TemplateStack information
     stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
-
+    
+    # Now, read the state data again
+    with open('./state/state-ec2.json', 'r') as file:
+        state_data = json.load(file)
+    
     # Create an instance of UpdatePanorama
     updater = UpdatePanorama(stack_name, dg_name, token, base_url, state_data)
 

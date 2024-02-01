@@ -246,6 +246,8 @@ class EC2Deployer:
 
         # Record the created resources in the state dictionary
         self.record_state(region, instance_id, vm_name, sg_public_id, sg_private_id, sorted_network_interfaces)
+        with open('./state/state-ec2.json', 'w') as f:
+            json.dump(self.state, f, indent=4)        
 
     def record_state(self, region, instance_id, vm_name, sg_public_id, sg_private_id, sorted_network_interfaces):
         # This method updates the state dictionary with the new resources created

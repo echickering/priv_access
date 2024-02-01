@@ -34,7 +34,7 @@ class UpdatePanorama:
             logger.error(f"Error while trying to get devices: {e}")
             return None
 
-    def update_panorama_variables(self, max_retries=60, delay=30):
+    def update_panorama_variables(self, max_retries=150, delay=15):
         # Get the logger
         logger = logging.getLogger()
 
@@ -43,6 +43,11 @@ class UpdatePanorama:
 
         for attempt in range(max_retries):
             devices = self.get_devices(logger)
+            if not devices:
+                logger.info(f'Waiting for devices to be registered. Retrying in {delay} seconds...Attempt: {attempt} of Max Attempts:{max_retries}')
+                time.sleep(delay)
+                continue  # Skip the current iteration and wait for the next attempt
+            
             if devices:
                 for device in devices:
                     serial_elem = device.find('serial')
