@@ -32,9 +32,20 @@ def setup_logging():
 
 def main():
     setup_logging()  # Call the setup_logging function
-    # Retrieve JSON state
-    with open('./state/state-ec2.json', 'r') as file:
-        state_data = json.load(file)
+
+    # Check if state-ec2.json is empty or non-existent, and initialize it with {}
+    try:
+        with open('./state/state-ec2.json', 'r') as file:
+            state_data = json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        state_data = {}
+        with open('./state/state-ec2.json', 'w') as file:
+            json.dump(state_data, file)
+        logging.info("'state-ec2.json' was empty or non-existent, initialized with empty state.")
+
+        # Reload the file after writing the empty state
+        with open('./state/state-ec2.json', 'r') as file:
+            state_data = json.load(file)
 
     # Load the configuration from config.yml
     with open('./config/config.yml', 'r') as file:

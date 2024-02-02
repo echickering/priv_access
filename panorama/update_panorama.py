@@ -155,15 +155,14 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_all_to_template_stack(self, logger):
+    def commit_all_to_template_stack(self, logger, delay=150):
         payload = {
             'type': 'commit',
             'action': 'all',
-            # 'cmd': f'<commit-all><template-stack><name>{self.stack_name}</name></template-stack></commit-all>',
             'cmd': f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>',
             'key': self.token
         }
-        logger.info(f'Payload for commit_all: {payload}')
+        time.sleep(delay)
         response = requests.post(self.base_url, params=payload, verify=False)
         logger.info(f"Response from commit-all operation:\n{response.text}")
 
@@ -172,7 +171,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def check_commit_status(self, job_id, logger, max_retries=20, delay=30):
+    def check_commit_status(self, job_id, logger, max_retries=30, delay=10):
         for attempt in range(max_retries):
             payload = {
                 'type': 'op',
@@ -186,6 +185,20 @@ class UpdatePanorama:
             status = root.find('.//result/job/status').text if root.find('.//result/job/status') is not None else None
 
             if status == 'FIN':
+                job_result = root.find('.//result/job/result').text if root.find('.//result/job/result') is not None else None
+                if job_result == 'FAIL':
+                    devices = root.findall('.//result/job/devices/entry')
+                    not_connected_devices = [device for device in devices if device.find('status').text == 'not connected']
+                    if not_connected_devices:
+                        logger.warning("Some devices not connected. Retrying...")
+                        commit_all_job_id = self.commit_all_to_template_stack(logger)
+                        if commit_all_job_id:
+                            job_id = commit_all_job_id  # Update job_id with the new one
+                            time.sleep(delay)
+                            continue
+                    else:
+                        logger.error("Commit failed for other reasons.")
+                        return False
                 logger.info(f"Commit job {job_id} completed successfully.")
                 return True
             elif status in ['ACT', 'PEND']:
