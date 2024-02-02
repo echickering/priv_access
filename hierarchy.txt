@@ -7,6 +7,9 @@ priv_access/
 │   └── palo_token.py
 ├── aws/
 │   └── __init__.py
+│   └── deploy_ec2.py
+│   └── deploy_vpc.py
+│   └── destroy_ec2.py
 ├── config/
 │   ├── aws_credentials.yml
 │   ├── config.yml
@@ -14,12 +17,9 @@ priv_access/
 │   └── vpc_template.yml
 ├── panorama/
 │   └── __init__.py
+│   └── update_panorama.py
 ├── scripts/
 │   └── __init__.py
-│   └── deploy_ec2.py
-│   └── deploy_vpc.py
-│   └── destroy_ec2.py
-│   └── update_panorama.py
 ├── state/
 │   └── __init__.py
 ├── utils/
