@@ -24,7 +24,7 @@ class VPCDeployer:
             action = "Update Initiated"
         except cf_client.exceptions.ClientError as error:
             if error.response['Error']['Message'] == 'No updates are to be performed.':
-                logging.info("No updates are to be performed.")
+                logging.info("No VPC updates are to be performed.")
                 return {"Status": "No Update Needed"}
             elif 'does not exist' in error.response['Error']['Message']:
                 logging.info(f"Creating stack {stack_name}...")
@@ -63,7 +63,7 @@ class VPCDeployer:
 
     def main(self):
         for region, region_config in self.config['aws']['Regions'].items():
-            logging.info(f"Deploying in region: {region}")
+            logging.info(f"Deploying VPC in region: {region}")
 
             # Check if name_prefix is None before using it
             if self.name_prefix is not None:

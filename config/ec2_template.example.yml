@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to deploy an EC2 instance with IMDSv2, default encryption, security groups, network interfaces, and Elastic IPs.
+
+Parameters:
+  AMIId:
+    Type: AWS::EC2::Image::Id
+    Description: The ID of the AMI to launch.
+  InstanceType:
+    Type: String
+    Description: EC2 instance type.
+  KeyName:
+    Type: String
+    Description: The EC2 Key Pair name to allow SSH access to the instance.
+  EC2UserData:
+    Type: String
+    Default: ""
+    Description: Base64-encoded user data to provide when launching the instance.
+  Subnet1Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the subnet to launch the public interface into.
+  Subnet2Id:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the subnet to launch the management and private interfaces into.
+  InstanceName:
+    Type: String
+    Description: The name of the EC2 instance for tagging purposes.
+  MyVpcId:
+    Type: String
+    Description: The VpcId where resources will be deployed
+
+Resources:
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow specific ingress traffic.
+      VpcId: !Ref MyVpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 500
+          ToPort: 500
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 4500
+          ToPort: 4500
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 4501
+          ToPort: 4501
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow all RFC-1918 addresses ingress all traffic.
+      VpcId: !Ref MyVpcId
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          CidrIp: 10.0.0.0/8
+        - IpProtocol: -1
+          CidrIp: 172.16.0.0/12
+        - IpProtocol: -1
+          CidrIp: 192.168.0.0/16
+
+  PublicEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  MgmtEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  PublicInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref Subnet1Id
+      Description: Public interface
+      GroupSet:
+        - !Ref PublicSecurityGroup
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: PublicInterface
+
+  MgmtInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref Subnet2Id
+      Description: Management interface
+      GroupSet:
+        - !Ref PrivateSecurityGroup
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: MgmtInterface
+
+  PrivateInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId: !Ref Subnet2Id
+      Description: Private interface
+      GroupSet:
+        - !Ref PrivateSecurityGroup
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: PrivateInterface
+
+  PublicInterfaceEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt PublicEIP.AllocationId
+      NetworkInterfaceId: !Ref PublicInterface
+
+  MgmtInterfaceEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MgmtEIP.AllocationId
+      NetworkInterfaceId: !Ref MgmtInterface
+
+  MyLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${InstanceName}-launch-template"
+      LaunchTemplateData:
+        ImageId: !Ref AMIId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        MetadataOptions:
+          HttpTokens: required
+        UserData: !Ref EC2UserData
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              Encrypted: true
+              DeleteOnTermination: true
+              VolumeSize: 60
+              VolumeType: gp3
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLaunchTemplate
+        Version: !GetAtt MyLaunchTemplate.LatestVersionNumber
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref PublicInterface
+          DeviceIndex: 0
+        - NetworkInterfaceId: !Ref MgmtInterface
+          DeviceIndex: 1
+        - NetworkInterfaceId: !Ref PrivateInterface
+          DeviceIndex: 2
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+
+Outputs:
+  InstanceId:
+    Description: The Instance ID of the EC2 instance
+    Value: !Ref EC2Instance
+  PublicSecurityGroupId:
+    Description: The ID of the public security group
+    Value: !Ref PublicSecurityGroup
+  PrivateSecurityGroupId:
+    Description: The ID of the private security group
+    Value: !Ref PrivateSecurityGroup
+  PublicInterfaceId:
+    Description: The ID of the Public Network Interface
+    Value: !Ref PublicInterface
+  MgmtInterfaceId:
+    Description: The ID of the Management Network Interface
+    Value: !Ref MgmtInterface
+  PrivateInterfaceId:
+    Description: The ID of the Private Network Interface
+    Value: !Ref PrivateInterface
+  PublicEIP:
+    Description: The Elastic IP address associated with the Public Interface
+    Value: !Ref PublicEIP
+  MgmtEIP:
+    Description: The Elastic IP address associated with the Management Interface
+    Value: !Ref MgmtEIP

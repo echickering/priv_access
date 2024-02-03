@@ -15,6 +15,7 @@ class UpdatePanorama:
         self.state_data = state_data
 
     def get_devices(self, logger):
+        devices_list = []
         try:
             headers = {'X-PAN-KEY': self.token}
             payload = {'type': 'op', 'cmd': '<show><devices><all/></devices></show>'}
@@ -23,100 +24,55 @@ class UpdatePanorama:
             logger.info(f"Response from Panorama:\n{response.text}")
             root = ET.fromstring(response.content)
             devices = root.findall('.//result/devices/entry')
+            for device in devices:
+                serial = device.find('serial').text
+                mgmt_ip = device.find('ip-address').text  # Adjusted to match your XML structure
+                devices_list.append({'serial': serial, 'ipv4': mgmt_ip})
 
-            if devices:
+            if devices_list:
                 logger.info("Devices successfully retrieved from Panorama.")
-                return devices
             else:
                 logger.info("No devices found.")
-                return None
+            return devices_list
         except Exception as e:
             logger.error(f"Error while trying to get devices: {e}")
-            return None
+            return []
 
-    def update_panorama_variables(self, max_retries=150, delay=15):
-        # Get the logger
-        logger = logging.getLogger()
-
-        processed_devices = set()  # Track processed devices
-        state_devices = {details['vm_name'] for region, instances in self.state_data.items() for _, details in instances.items()}  # Set of all VM names in state_data
-
+    def update_panorama_variables(self, logger, max_retries=150, delay=15):
         for attempt in range(max_retries):
-            devices = self.get_devices(logger)
+            devices = self.get_devices(logger)  # Fetch devices from Panorama
+
             if not devices:
-                logger.info(f'Waiting for devices to be registered. Retrying in {delay} seconds...Attempt: {attempt} of Max Attempts:{max_retries}')
+                logger.info(f'Waiting for devices to be registered. Retrying in {delay} seconds...Attempt: {attempt + 1} of Max Attempts: {max_retries}')
                 time.sleep(delay)
-                continue  # Skip the current iteration and wait for the next attempt
-            
+                continue
+
+            for device in devices:
+                serial = device['serial']
+                mgmt_ip = device['ipv4']
+
+                # Find matching details in state_data based on mgmt_ip
+                matched_details = next((details for region, details in self.state_data.items() if details['mgmt_ip'] == mgmt_ip), None)
+
+                if matched_details:
+                    logger.info(f"Processing device with serial {serial} and management IP {mgmt_ip}")
+                    # Update Panorama variables for the matched device
+                    self.update_variable(serial, '$trust_ip', matched_details['trust_ip'], logger)
+                    self.update_variable(serial, '$untrust_ip', matched_details['untrust_ip'], logger)
+                    self.update_variable(serial, '$trust_nexthop', matched_details['trust_nexthop'], logger)
+                    self.update_variable(serial, '$untrust_nexthop', matched_details['untrust_nexthop'], logger)
+                    self.update_variable(serial, '$public_untrust_ip', matched_details['public_untrust_ip'], logger)
+
+                    logger.info(f"Updated variables for device with serial {serial}.")
+                else:
+                    logger.warning(f"No match found for device with serial {serial} and management IP {mgmt_ip}")
+
             if devices:
-                for device in devices:
-                    serial_elem = device.find('serial')
-                    hostname_elem = device.find('hostname')
+                logger.info("Successfully updated variables for all matched devices.")
+                break  # Exit after successfully processing all devices
 
-                    if serial_elem is None or hostname_elem is None:
-                        logger.error("Serial or hostname element missing in device data. Skipping device.")
-                        continue
-
-                    serial = serial_elem.text
-                    hostname = hostname_elem.text
-
-                    if hostname not in state_devices or hostname in processed_devices:
-                        continue  # Skip if device is not in state_data or already processed
-
-                    logger.info(f"Processing device {hostname} with serial {serial}")
-
-                    # Find matching VM in state data
-                    for region, instances in self.state_data.items():
-                        for instance_id, instance_details in instances.items():
-                            if instance_details['vm_name'] == hostname:
-                                instance_details['serial'] = serial
-                                logger.info(f"Found matching VM: {hostname}")
-
-                                trust_ip = None
-                                untrust_ip = None
-                                trust_nexthop = None
-                                untrust_nexthop = None
-                                public_untrust_ip = None
-                                ni = None
-
-                                # Find the correct Network Interface (ni) based on conditions
-                                for ni_candidate in instance_details['NetworkInterfaces']:
-                                    if ni_candidate['DeviceIndex'] == 2:
-                                        trust_ip = ni_candidate['PrivateIpCidr']
-                                        trust_nexthop = ni_candidate['DefaultGW']
-                                    elif ni_candidate['DeviceIndex'] == 0:
-                                        untrust_ip = ni_candidate['PrivateIpCidr']
-                                        untrust_nexthop = ni_candidate['DefaultGW']
-                                        ni = ni_candidate  # Assign ni here
-
-                                # Find the correct ElasticIP (eip) based on conditions
-                                for eip in instance_details['ElasticIPs']:
-                                    if ni and eip['InterfaceId'] == ni['InterfaceId']:
-                                        public_untrust_ip = eip['PublicIP']
-
-                                logger.info(f"Updating variables for VM: {hostname}")
-
-                                # Update template variables in Panorama
-                                self.update_variable(serial, '$trust_ip', trust_ip, logger)
-                                self.update_variable(serial, '$untrust_ip', untrust_ip, logger)
-                                self.update_variable(serial, '$trust_nexthop', trust_nexthop, logger)
-                                self.update_variable(serial, '$untrust_nexthop', untrust_nexthop, logger)
-                                self.update_variable(serial, '$public_untrust_ip', public_untrust_ip, logger)
-
-                                logger.info(f"Variables updated for VM: {hostname}")
-                                processed_devices.add(hostname)  # Add hostname to processed_devices
-
-            if processed_devices == state_devices:
-                logger.info("All devices from state data have been processed.")
-                break  # Exit if all devices in state_data are processed
-
-            if attempt < max_retries - 1:
-                logger.info(f"Waiting for more devices to register. Retrying in {delay} seconds\nAttempt: {attempt} of max attempt:{max_retries}...")
-                time.sleep(delay)
-
-        if processed_devices != state_devices:
-            logger.error("Not all devices from state data were processed.")
-            # Additional logic for unprocessed devices can be added here
+        if attempt >= max_retries - 1:
+            logger.error("Reached maximum retry attempts without successfully updating all devices.")
 
     def update_variable(self, serial, variable_name, value, logger):
         # XPath
@@ -211,11 +167,6 @@ class UpdatePanorama:
         logger.error(f"Maximum retries reached for commit job {job_id} status check.")
         return False
 
-
-    def write_state_to_file(self, file_path='./state/state-ec2.json'):
-        with open(file_path, 'w') as f:
-            json.dump(self.state_data, f, indent=4)
-
     def update_panorama(self):
         # Disable SSL warnings
         urllib3.disable_warnings()
@@ -224,7 +175,7 @@ class UpdatePanorama:
         logger = logging.getLogger()
 
         # Call methods to update Panorama variables
-        self.update_panorama_variables()
+        self.update_panorama_variables(logger)
 
         # Committing changes to Panorama
         job_id = self.commit_panorama(logger)

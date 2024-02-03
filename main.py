@@ -1,5 +1,4 @@
 # project/main.py
-import json
 import logging
 import yaml
 from logging.handlers import TimedRotatingFileHandler
@@ -7,6 +6,7 @@ from api.palo_token import PaloToken
 from panorama.update_panorama import UpdatePanorama
 from aws.deploy_vpc import VPCDeployer
 from aws.deploy_ec2 import EC2Deployer
+from aws.fetch_state import FetchState
 
 def setup_logging():
     # Create a logger
@@ -33,20 +33,6 @@ def setup_logging():
 def main():
     setup_logging()  # Call the setup_logging function
 
-    # Check if state-ec2.json is empty or non-existent, and initialize it with {}
-    try:
-        with open('./state/state-ec2.json', 'r') as file:
-            state_data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        state_data = {}
-        with open('./state/state-ec2.json', 'w') as file:
-            json.dump(state_data, file)
-        logging.info("'state-ec2.json' was empty or non-existent, initialized with empty state.")
-
-        # Reload the file after writing the empty state
-        with open('./state/state-ec2.json', 'r') as file:
-            state_data = json.load(file)
-
     # Load the configuration from config.yml
     with open('./config/config.yml', 'r') as file:
         config = yaml.safe_load(file)
@@ -57,28 +43,21 @@ def main():
     # Call the load_config_and_deploy method on the instance
     deployer_vpc.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
 
-    # Extract regions from the configuration
-    configured_regions = config['aws']['Regions'].keys()
-
     # Create an instance of EC2Deployer
     ec2_deployer = EC2Deployer()
+    ec2_deployer.deploy()
 
-    # Extract regions from the state
-    deployed_regions = state_data.keys()
+    # Initialize FetchState class
+    fetch_data = FetchState('./config/config.yml', './config/aws_credentials.yml')
+    state_data = fetch_data.fetch_and_process_state()
 
-    # Identify new regions (present in config but not in state)
-    new_regions = [region for region in configured_regions if region not in deployed_regions]
-
-    # Check if there are new regions to deploy
-    if new_regions:
-        # Deploy VMs only in new regions
-        for region in new_regions:
-            logging.info(f'New Region or VM count increased, deploying VM in {region}')
-            # ec2_deployer.setup_region_session(region)
-            ec2_deployer.deploy_region(region)
-    else:
-        # Log that no new regions or VMs need creating
-        logging.info("No new regions or VMs need creating.")
+    # Print the fetched and processed state data
+    print("Fetched and Processed State Data:")
+    for region, data in state_data.items():
+        print(f"Region: {region}")
+        for key, value in data.items():
+            print(f"  {key}: {value}")
+        print("")  # Add a newline for better readability
 
     # Load PAN credentials
     palo_token = PaloToken()
@@ -89,19 +68,11 @@ def main():
     stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
     
-    # Now, read the state data again
-    with open('./state/state-ec2.json', 'r') as file:
-        state_data = json.load(file)
-    
     # Create an instance of UpdatePanorama
     updater = UpdatePanorama(stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
 
-    return updater
-
 if __name__ == '__main__':
     updater = main()
-    if updater:  # Check if updater is not None
-        updater.write_state_to_file()
