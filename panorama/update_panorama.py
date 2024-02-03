@@ -111,7 +111,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_all_to_template_stack(self, logger, delay=150):
+    def commit_dg_tpl_stack(self, logger, delay=150):
         payload = {
             'type': 'commit',
             'action': 'all',
@@ -147,7 +147,7 @@ class UpdatePanorama:
                     not_connected_devices = [device for device in devices if device.find('status').text == 'not connected']
                     if not_connected_devices:
                         logger.warning("Some devices not connected. Retrying...")
-                        commit_all_job_id = self.commit_all_to_template_stack(logger)
+                        commit_all_job_id = self.commit_dg_tpl_stack(logger)
                         if commit_all_job_id:
                             job_id = commit_all_job_id  # Update job_id with the new one
                             time.sleep(delay)
@@ -181,6 +181,6 @@ class UpdatePanorama:
         job_id = self.commit_panorama(logger)
         if job_id and self.check_commit_status(job_id, logger):
             logger.info("Proceeding with commit-all to template stack.")
-            commit_all_job_id = self.commit_all_to_template_stack(logger)
+            commit_all_job_id = self.commit_dg_tpl_stack(logger)
             if commit_all_job_id:
                 self.check_commit_status(commit_all_job_id, logger)

@@ -52,12 +52,12 @@ def main():
     state_data = fetch_data.fetch_and_process_state()
 
     # Print the fetched and processed state data
-    print("Fetched and Processed State Data:")
+    logging.info("Fetched and Processed State Data:")
     for region, data in state_data.items():
-        print(f"Region: {region}")
+        logging.info(f"Region: {region}")
         for key, value in data.items():
-            print(f"  {key}: {value}")
-        print("")  # Add a newline for better readability
+            logging.info(f"  {key}: {value}")
+        logging.info("")  # Add a newline for better readability
 
     # Load PAN credentials
     palo_token = PaloToken()
@@ -65,11 +65,11 @@ def main():
     base_url = palo_token.ngfw_url
 
     #Obtain the Panorama TemplateStack information
-    stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
+    tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(stack_name, dg_name, token, base_url, state_data)
+    updater = UpdatePanorama(tpl_stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
