@@ -115,7 +115,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=15):
+    def commit_dg_tpl_stack(self, logger, delay=30):
         payload = {
             'type': 'commit',
             'action': 'all',
