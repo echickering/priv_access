@@ -28,7 +28,12 @@ class FetchState:
         try:
             stack_info = cf_client.describe_stacks(StackName=stack_name)
             outputs = stack_info['Stacks'][0]['Outputs']
-            return {output['OutputKey']: output['OutputValue'] for output in outputs}
+            outputs_dict = {output['OutputKey']: output['OutputValue'] for output in outputs}
+            
+            # Debug logging to show fetched outputs
+            logging.info(f"Fetched stack outputs for {stack_name} in {region}: {outputs_dict}")
+            
+            return outputs_dict
         except Exception as e:
             logging.error(f"Error fetching outputs for stack {stack_name} in region {region}: {e}")
             return {}
@@ -50,19 +55,35 @@ class FetchState:
         ec2_stack_name = self.config['aws']['StackNameEC2']
         ec2_outputs = self.fetch_stack_outputs(region, ec2_stack_name)
 
-        # Fetching EIP directly since it's already in IP form
-        public_untrust_ip = ec2_outputs.get('PublicEIP')
-        # Fetching ENI private IPs
-        untrust_ip = self.fetch_eni_private_ip(region, ec2_outputs.get('PublicInterfaceId'))
-        mgmt_ip = self.fetch_eni_private_ip(region, ec2_outputs.get('MgmtInterfaceId'))
-        trust_ip = self.fetch_eni_private_ip(region, ec2_outputs.get('PrivateInterfaceId'))
+        processed_data = {}
+        # Assuming instance numbers are sequential and start from 1
+        for instance_num in range(1, 10):  # Adjust the range as needed based on possible max instances
+            public_untrust_ip = ec2_outputs.get(f'PublicEIP{instance_num}')
+            untrust_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{instance_num}'))
+            mgmt_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'MgmtInterface{instance_num}'))
+            trust_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{instance_num}'))
 
-        if not all([public_untrust_ip, untrust_ip, trust_ip, mgmt_ip]):
-            logging.error(f"Failed to fetch all necessary data for EC2 interface in region {region}.")
-        
-        return public_untrust_ip, untrust_ip, trust_ip, mgmt_ip
+            if not all([public_untrust_ip, untrust_ip, mgmt_ip, trust_ip]):
+                logging.debug(f"Partial or no data fetched for EC2 instance {instance_num} in region {region}. Skipping.")
+                continue  # Skip to the next instance if critical data is missing
+
+            processed_data[f'instance{instance_num}'] = {
+                'public_untrust_ip': public_untrust_ip,
+                'untrust_ip': untrust_ip,
+                'trust_ip': trust_ip,
+                'mgmt_ip': mgmt_ip
+            }
+
+        if not processed_data:
+            logging.error(f"No valid EC2 instance data found in region {region}.")
+            return {}  # Return an empty dict if no valid data was found for any instance
+
+        return processed_data
 
     def fetch_eni_private_ip(self, region, eni_id):
+        if eni_id is None:
+            logging.debug(f"ENI ID is None for region {region}. Skipping fetch for private IP.")
+            return None
         ec2_client = boto3.client('ec2', region_name=region, aws_access_key_id=self.aws_credentials['access_key_id'], aws_secret_access_key=self.aws_credentials['secret_access_key'])
         try:
             eni_info = ec2_client.describe_network_interfaces(NetworkInterfaceIds=[eni_id])
@@ -76,13 +97,22 @@ class FetchState:
         state = {}
         for region in self.config['aws']['Regions']:
             untrust_nexthop, trust_nexthop = self.process_vpc_subnet_data(region)
-            public_untrust_ip, untrust_ip, trust_ip, mgmt_ip = self.process_ec2_interface_data(region)
-            state[region] = {
-                'untrust_nexthop': untrust_nexthop,
-                'trust_nexthop': trust_nexthop,
-                'public_untrust_ip': public_untrust_ip,
-                'untrust_ip': untrust_ip,
-                'trust_ip': trust_ip,
-                'mgmt_ip': mgmt_ip
-            }
+            instance_data = self.process_ec2_interface_data(region)  # This now returns a dictionary
+
+            # Process each instance's data from the dictionary
+            for instance_num, data in instance_data.items():
+                public_untrust_ip = data.get('public_untrust_ip')
+                untrust_ip = data.get('untrust_ip')
+                trust_ip = data.get('trust_ip')
+                mgmt_ip = data.get('mgmt_ip')
+
+                state[f'{region}_instance_{instance_num}'] = {
+                    'untrust_nexthop': untrust_nexthop,
+                    'trust_nexthop': trust_nexthop,
+                    'public_untrust_ip': public_untrust_ip,
+                    'untrust_ip': untrust_ip,
+                    'trust_ip': trust_ip,
+                    'mgmt_ip': mgmt_ip,
+                }
+        logging.info(f'Current State: {state}')
         return state

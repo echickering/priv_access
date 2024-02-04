@@ -7,6 +7,8 @@ from panorama.update_panorama import UpdatePanorama
 from aws.deploy_vpc import VPCDeployer
 from aws.deploy_ec2 import EC2Deployer
 from aws.fetch_state import FetchState
+from aws.update_ec2_template import UpdateEc2Template
+
 
 def setup_logging():
     # Create a logger
@@ -43,6 +45,13 @@ def main():
     # Call the load_config_and_deploy method on the instance
     deployer_vpc.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
 
+    # Update EC2 CloudFormation template based on min/max ec2 count
+    ec2_template_updater = UpdateEc2Template('./config/config.yml', './config/ec2_template.yml')
+    ec2_template_updater.update_templates()
+    logging.info("EC2 template updated based on min/max EC2 count.")
+
+
+
     # Create an instance of EC2Deployer
     ec2_deployer = EC2Deployer()
     ec2_deployer.deploy()
@@ -75,4 +84,5 @@ def main():
     updater.update_panorama()
 
 if __name__ == '__main__':
-    updater = main()
+    main()
+    # updater = main()

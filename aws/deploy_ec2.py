@@ -2,12 +2,13 @@ import boto3
 import yaml
 import logging
 import base64
+import os
 
 class EC2Deployer:
-    def __init__(self, config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml', template_path='./config/ec2_template.yml'):
+    def __init__(self, config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml', output_dir='./config'):
         self.config = self.load_config(config_path)
         self.aws_credentials = self.load_aws_credentials(aws_credentials_path)
-        self.template_body = self.load_template(template_path)
+        self.output_dir = output_dir
         self.cf_client = None
 
     def load_config(self, file_path):
@@ -18,8 +19,10 @@ class EC2Deployer:
         with open(file_path, 'r') as file:
             return yaml.safe_load(file)['aws_credentials']
 
-    def load_template(self, file_path):
-        with open(file_path, 'r') as file:
+    # This function now takes an additional parameter for the region
+    def load_template_for_region(self, region):
+        template_path = os.path.join(self.output_dir, f"{region}_ec2_template.yml")
+        with open(template_path, 'r') as file:
             return file.read()
 
     def setup_client(self, region):
@@ -73,6 +76,7 @@ class EC2Deployer:
         self.setup_client(region)
         region_config = self.config['aws']['Regions'][region]
         stack_name = self.config['aws']['StackNameEC2']
+        template_body = self.load_template_for_region(region)  # Load the region-specific template
 
         user_data_encoded = self.prepare_user_data(region)
 
@@ -98,7 +102,7 @@ class EC2Deployer:
             logging.info(f"Attempting to update stack {stack_name} in {region}...")
             response = self.cf_client.update_stack(
                 StackName=stack_name,
-                TemplateBody=self.template_body,
+                TemplateBody=template_body,
                 Parameters=parameters,
                 Capabilities=['CAPABILITY_NAMED_IAM']
             )
@@ -110,7 +114,7 @@ class EC2Deployer:
                 logging.info(f"Stack {stack_name} does not exist in {region}, creating...")
                 response = self.cf_client.create_stack(
                     StackName=stack_name,
-                    TemplateBody=self.template_body,
+                    TemplateBody=template_body,
                     Parameters=parameters,
                     Capabilities=['CAPABILITY_NAMED_IAM'],
                     OnFailure='ROLLBACK'
@@ -135,7 +139,9 @@ class EC2Deployer:
         return {"Status": action, "StackId": response['StackId']}
 
     def deploy(self):
+        # Loop through each region defined in the config and deploy the stack for that region
         for region in self.config['aws']['Regions']:
+            logging.info(f"Deploying EC2 stack in {region}...")
             self.deploy_stack(region)
 
 if __name__ == '__main__':

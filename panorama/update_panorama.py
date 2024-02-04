@@ -52,18 +52,21 @@ class UpdatePanorama:
                 mgmt_ip = device['ipv4']
 
                 # Find matching details in state_data based on mgmt_ip
-                matched_details = next((details for region, details in self.state_data.items() if details['mgmt_ip'] == mgmt_ip), None)
+                for region, details in self.state_data.items():
+                    if details['mgmt_ip'] == mgmt_ip:
+                        logger.info(f"Processing device with serial {serial} and management IP {mgmt_ip}")
+                        # Add serial number to the matched details
+                        details['serial'] = serial  # Update state_data with serial number
 
-                if matched_details:
-                    logger.info(f"Processing device with serial {serial} and management IP {mgmt_ip}")
-                    # Update Panorama variables for the matched device
-                    self.update_variable(serial, '$trust_ip', matched_details['trust_ip'], logger)
-                    self.update_variable(serial, '$untrust_ip', matched_details['untrust_ip'], logger)
-                    self.update_variable(serial, '$trust_nexthop', matched_details['trust_nexthop'], logger)
-                    self.update_variable(serial, '$untrust_nexthop', matched_details['untrust_nexthop'], logger)
-                    self.update_variable(serial, '$public_untrust_ip', matched_details['public_untrust_ip'], logger)
+                        # Update Panorama variables for the matched device
+                        self.update_variable(serial, '$trust_ip', details['trust_ip'], logger)
+                        self.update_variable(serial, '$untrust_ip', details['untrust_ip'], logger)
+                        self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
+                        self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
+                        self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
 
-                    logger.info(f"Updated variables for device with serial {serial}.")
+                        logger.info(f"Updated variables for device with serial {serial}.")
+                        break  # Break the loop once a match is found and updated
                 else:
                     logger.warning(f"No match found for device with serial {serial} and management IP {mgmt_ip}")
 
@@ -73,6 +76,7 @@ class UpdatePanorama:
 
         if attempt >= max_retries - 1:
             logger.error("Reached maximum retry attempts without successfully updating all devices.")
+
 
     def update_variable(self, serial, variable_name, value, logger):
         # XPath
@@ -111,7 +115,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=150):
+    def commit_dg_tpl_stack(self, logger, delay=15):
         payload = {
             'type': 'commit',
             'action': 'all',
@@ -142,21 +146,22 @@ class UpdatePanorama:
 
             if status == 'FIN':
                 job_result = root.find('.//result/job/result').text if root.find('.//result/job/result') is not None else None
-                if job_result == 'FAIL':
-                    devices = root.findall('.//result/job/devices/entry')
-                    not_connected_devices = [device for device in devices if device.find('status').text == 'not connected']
-                    if not_connected_devices:
-                        logger.warning("Some devices not connected. Retrying...")
-                        commit_all_job_id = self.commit_dg_tpl_stack(logger)
-                        if commit_all_job_id:
-                            job_id = commit_all_job_id  # Update job_id with the new one
-                            time.sleep(delay)
-                            continue
-                    else:
-                        logger.error("Commit failed for other reasons.")
-                        return False
-                logger.info(f"Commit job {job_id} completed successfully.")
-                return True
+                devices = root.findall('.//result/job/devices/entry')
+                pending_devices = [device for device in devices if device.find('result').text == 'PEND']
+
+                if job_result == 'FAIL' and not pending_devices:
+                    # Handle the case where job failed but no devices are pending, meaning all have processed but some failed.
+                    logger.info("Commit job completed with failures, but all relevant devices processed.")
+                    return False
+
+                if not pending_devices:
+                    logger.info(f"Commit job {job_id} completed successfully.")
+                    return True
+                else:
+                    logger.info("Some devices are still pending. Waiting for completion.")
+                    time.sleep(delay)
+                    continue  # Wait for pending devices to complete
+
             elif status in ['ACT', 'PEND']:
                 logger.info(f"Commit job {job_id} is still in progress. Waiting {delay} seconds before next check.")
                 time.sleep(delay)
@@ -164,7 +169,7 @@ class UpdatePanorama:
                 logger.error(f"Commit job {job_id} failed or status is unknown.")
                 return False
 
-        logger.error(f"Maximum retries reached for commit job {job_id} status check.")
+        logger.error(f"Maximum retries reached for commit job {job_id} status check without all devices completing.")
         return False
 
     def update_panorama(self):

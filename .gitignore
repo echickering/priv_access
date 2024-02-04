@@ -18,7 +18,11 @@ __pycache__/
 # Python scripts to ignore
 find_xpath.py
 deploy_vpc2.py
+deploy_ec22.py
 ec2_deployer.py
+fetch_state2.py
+update_ec2_template2.py
+update_panorama2.py
 running-config.xml
 config.xml
 
