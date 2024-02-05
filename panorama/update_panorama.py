@@ -39,44 +39,45 @@ class UpdatePanorama:
             return []
 
     def update_panorama_variables(self, logger, max_retries=150, delay=15):
+        # Initialize all devices in state_data as not connected
+        for _, details in self.state_data.items():
+            details['is_connected'] = False
+
         for attempt in range(max_retries):
+            all_connected = True
             devices = self.get_devices(logger)  # Fetch devices from Panorama
 
-            if not devices:
-                logger.info(f'Waiting for devices to be registered. Retrying in {delay} seconds...Attempt: {attempt + 1} of Max Attempts: {max_retries}')
-                time.sleep(delay)
-                continue
-
-            for device in devices:
-                serial = device['serial']
-                mgmt_ip = device['ipv4']
-
-                # Find matching details in state_data based on mgmt_ip
-                for region, details in self.state_data.items():
-                    if details['mgmt_ip'] == mgmt_ip:
-                        logger.info(f"Processing device with serial {serial} and management IP {mgmt_ip}")
-                        # Add serial number to the matched details
-                        details['serial'] = serial  # Update state_data with serial number
-
-                        # Update Panorama variables for the matched device
-                        self.update_variable(serial, '$trust_ip', details['trust_ip'], logger)
-                        self.update_variable(serial, '$untrust_ip', details['untrust_ip'], logger)
-                        self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
-                        self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
-                        self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
-
-                        logger.info(f"Updated variables for device with serial {serial}.")
-                        break  # Break the loop once a match is found and updated
+            # Check and update the connection status for each device in state_data
+            for region, details in self.state_data.items():
+                matched_device = next((device for device in devices if device['ipv4'] == details['mgmt_ip']), None)
+                if matched_device:
+                    details['is_connected'] = True
+                    details['serial'] = matched_device['serial']  # Update state_data with serial number
+                    # Update Panorama variables for the matched device
+                    self.update_device_variables(matched_device['serial'], details, logger)
                 else:
-                    logger.warning(f"No match found for device with serial {serial} and management IP {mgmt_ip}")
+                    all_connected = False  # Not all devices are connected yet
 
-            if devices:
-                logger.info("Successfully updated variables for all matched devices.")
-                break  # Exit after successfully processing all devices
+            if all_connected:
+                logger.info("All devices in state_data are connected to Panorama.")
+                break  # Exit the loop if all devices are connected
+            else:
+                logger.info(f'Waiting for all devices to connect. Retrying in {delay} seconds...Attempt: {attempt + 1} of Max Attempts: {max_retries}')
+                time.sleep(delay)
 
-        if attempt >= max_retries - 1:
-            logger.error("Reached maximum retry attempts without successfully updating all devices.")
+        if not all_connected:
+            logger.error("Not all devices in state_data connected to Panorama within the retry limit.")
 
+    def update_device_variables(self, serial, details, logger):
+        logger.info(f"Processing device with serial {serial} and management IP {details['mgmt_ip']}")
+        self.update_variable(serial, '$trust_ip', details['trust_ip'], logger)
+        self.update_variable(serial, '$trust_secondary_ip', details['trust_secondary_ip'], logger)
+        self.update_variable(serial, '$untrust_ip', details['untrust_ip'], logger)
+        self.update_variable(serial, '$untrust_router_id', details['untrust_router_id'], logger)
+        self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
+        self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
+        self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
+        logger.info(f"Updated variables for device with serial {serial}.")
 
     def update_variable(self, serial, variable_name, value, logger):
         # XPath
@@ -115,13 +116,14 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=30):
+    def commit_dg_tpl_stack(self, logger, delay=90):
         payload = {
             'type': 'commit',
             'action': 'all',
             'cmd': f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>',
             'key': self.token
         }
+        logger.info(f'Waiting {delay} seconds for devices to stablize during onboarding')
         time.sleep(delay)
         response = requests.post(self.base_url, params=payload, verify=False)
         logger.info(f"Response from commit-all operation:\n{response.text}")

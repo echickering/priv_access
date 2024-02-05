@@ -1,3 +1,4 @@
+# project/aws/deploy_ec2.py
 import boto3
 import yaml
 import logging

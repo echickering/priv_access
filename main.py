@@ -35,10 +35,6 @@ def setup_logging():
 def main():
     setup_logging()  # Call the setup_logging function
 
-    # Load the configuration from config.yml
-    with open('./config/config.yml', 'r') as file:
-        config = yaml.safe_load(file)
-
     # Create an instance of VPCDeployer
     deployer_vpc = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
 
@@ -50,10 +46,9 @@ def main():
     ec2_template_updater.update_templates()
     logging.info("EC2 template updated based on min/max EC2 count.")
 
-
-
     # Create an instance of EC2Deployer
     ec2_deployer = EC2Deployer()
+    # Deploy EC2 Instances per region
     ec2_deployer.deploy()
 
     # Initialize FetchState class
@@ -72,6 +67,10 @@ def main():
     palo_token = PaloToken()
     token = palo_token.retrieve_token()
     base_url = palo_token.ngfw_url
+
+    # Load the configuration from config.yml
+    with open('./config/config.yml', 'r') as file:
+        config = yaml.safe_load(file)
 
     #Obtain the Panorama TemplateStack information
     tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplate']

@@ -10,6 +10,7 @@ priv_access/
 │   └── deploy_ec2.py
 │   └── deploy_vpc.py
 │   └── destroy_ec2.py
+│   └── update_ec2_template.py
 ├── config/
 │   ├── aws_credentials.yml
 │   ├── config.yml
@@ -18,10 +19,6 @@ priv_access/
 ├── panorama/
 │   └── __init__.py
 │   └── update_panorama.py
-├── scripts/
-│   └── __init__.py
-├── state/
-│   └── __init__.py
 ├── utils/
 │   └── __init__.py
 └── vpn_manager/
