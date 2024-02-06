@@ -2,12 +2,14 @@
 import logging
 import yaml
 from logging.handlers import TimedRotatingFileHandler
+from aws.aws_creds import AWSUtil
 from api.palo_token import PaloToken
-from panorama.update_panorama import UpdatePanorama
-from aws.deploy_vpc import VPCDeployer
-from aws.deploy_ec2 import EC2Deployer
-from aws.fetch_state import FetchState
-from aws.update_ec2_template import UpdateEc2Template
+from panorama.update_panorama2 import UpdatePanorama
+from aws.deploy_vpc2 import VPCDeployer
+from aws.deploy_ec22 import EC2Deployer
+from aws.fetch_state2 import FetchState
+from aws.update_ec2_template2 import UpdateEc2Template
+from aws.dynamodb_manager import DynamoDBManager
 
 
 def setup_logging():
@@ -34,6 +36,13 @@ def setup_logging():
 
 def main():
     setup_logging()  # Call the setup_logging function
+
+    # Initialize DynamoDBManager with AWS credentials - Step 2
+    aws_credentials = AWSUtil.load_aws_credentials()
+    dynamodb_manager = DynamoDBManager(aws_credentials=aws_credentials, table_name="MobileUserPool")
+
+    # Create a DynamoDB table if it doesn't exist
+    dynamodb_manager.create_table_if_not_exists()
 
     # Create an instance of VPCDeployer
     deployer_vpc = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
@@ -73,11 +82,12 @@ def main():
         config = yaml.safe_load(file)
 
     #Obtain the Panorama TemplateStack information
-    tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplate']
+    template_name = config['palo_alto']['panorama']['PanoramaTemplate']
+    tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplateStack']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(tpl_stack_name, dg_name, token, base_url, state_data)
+    updater = UpdatePanorama(template_name, tpl_stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
