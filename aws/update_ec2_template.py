@@ -1,4 +1,4 @@
-# project/aws/update_ec2_template.py
+# project/aws/update_ec2_template2.py
 import yaml
 import copy
 import os

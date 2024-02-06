@@ -1,4 +1,4 @@
-# project/aws/deploy_vpc.py
+# project/aws/deploy_vpc2.py
 import boto3
 import yaml
 import logging

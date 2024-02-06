@@ -1,4 +1,4 @@
-# project/aws/fetch_state.py
+# project/aws/fetch_state2.py
 import boto3
 import yaml
 import ipaddress
@@ -75,10 +75,13 @@ class FetchState:
         untrust_subnet_mask = self.extract_cidr_suffix(subnet1_cidr)
         trust_subnet_mask = self.extract_cidr_suffix(subnet2_cidr)
 
+        # Determine max EC2 count from config.yml
+        max_ec2 = self.config['aws']['Regions'][region]['max_ec2_count']+1
+
         processed_data = {}
         
         # Assuming instance numbers are sequential and start from 1
-        for instance_num in range(1, 10):  # Adjust based on possible max instances
+        for instance_num in range(1, max_ec2):  # Adjust based on possible max instances
             public_untrust_ip = ec2_outputs.get(f'PublicEIP{instance_num}')
             untrust_ip_base, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{instance_num}'))
             untrust_ip = f"{untrust_ip_base}/{untrust_subnet_mask}" if untrust_ip_base and trust_subnet_mask else None
@@ -86,6 +89,10 @@ class FetchState:
             trust_ip_base, trust_secondary_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{instance_num}'))
             trust_ip = f"{trust_ip_base}/{trust_subnet_mask}" if trust_ip_base and trust_subnet_mask else None
             logging.debug(f'Secondary IP returned to process_ec2_interfaces_data: {trust_secondary_ip}')
+            gp_pool = self.config['aws']['Regions'][region]['globalprotect'][f'user_pool{instance_num}']
+            on_prem_vpn_settings = self.config['vpn']['on_prem_vpn_settings']
+            logging.info(f'Fetch State Current GP Pool: {gp_pool}')
+            untrust_nexthop, trust_nexthop = self.process_vpc_subnet_data(region)
 
             # Correctly append the secondary IP to the state data
             if not all([public_untrust_ip, untrust_ip, trust_ip, mgmt_ip]):
@@ -96,11 +103,17 @@ class FetchState:
                 'public_untrust_ip': public_untrust_ip,
                 'untrust_ip': untrust_ip,  # Includes CIDR
                 'untrust_router_id': untrust_ip_base, #RouterID for Untrust VR
+                'untrust_nexthop': untrust_nexthop,
+                'trust_nexthop': trust_nexthop,
                 'trust_ip': trust_ip,      # Includes CIDR
                 'trust_secondary_ip': trust_secondary_ip,  # Secondary trust IP
-                'mgmt_ip': mgmt_ip
+                'mgmt_ip': mgmt_ip,
+                'gp_pool': gp_pool
             }
-
+            # Dynamically adding on-prem VPN settings to the processed_data
+            for site, ip in on_prem_vpn_settings.items():
+                processed_data[f'instance{instance_num}'][site] = ip
+        logging.info(f'Current state: {processed_data}')
         if not processed_data:
             logging.error(f"No valid EC2 instance data found in region {region}.")
             return {}  # Return an empty dict if no valid data was found for any instance
@@ -128,26 +141,9 @@ class FetchState:
     def fetch_and_process_state(self):
         state = {}
         for region in self.config['aws']['Regions']:
-            untrust_nexthop, trust_nexthop = self.process_vpc_subnet_data(region)
-            instance_data = self.process_ec2_interface_data(region)  # This now returns a dictionary
-
-            # Process each instance's data from the dictionary
+            # your existing logic to process each region and instance
+            instance_data = self.process_ec2_interface_data(region)
             for instance_num, data in instance_data.items():
-                public_untrust_ip = data.get('public_untrust_ip')
-                untrust_ip = data.get('untrust_ip')
-                untrust_ip_base = data.get('untrust_router_id')
-                trust_ip = data.get('trust_ip')
-                trust_secondary_ip = data.get('trust_secondary_ip')
-                mgmt_ip = data.get('mgmt_ip')
-
-                state[f'{region}_instance_{instance_num}'] = {
-                    'untrust_nexthop': untrust_nexthop,
-                    'trust_nexthop': trust_nexthop,
-                    'public_untrust_ip': public_untrust_ip,
-                    'untrust_ip': untrust_ip,
-                    'untrust_router_id': untrust_ip_base, #RouterID for Untrust VR
-                    'trust_ip': trust_ip,
-                    'trust_secondary_ip': trust_secondary_ip,
-                    'mgmt_ip': mgmt_ip,
-                }
+                # Build the state with data already including dynamic keys
+                state[f'{region}_instance_{instance_num}'] = data
         return state

@@ -1,4 +1,4 @@
-# project/aws/deploy_ec2.py
+# project/aws/deploy_ec22.py
 import boto3
 import yaml
 import logging
@@ -44,7 +44,7 @@ class EC2Deployer:
             '{panorama_auth_key}': self.config['palo_alto']['panorama']['auth_key'],
             '{panorama_ip_address1}': self.config['palo_alto']['panorama']['ip_address1'],
             '{panorama_ip_address2}': self.config['palo_alto']['panorama']['ip_address2'],
-            '{PanoramaTemplate}': self.config['palo_alto']['panorama']['PanoramaTemplate'],
+            '{PanoramaTemplateStack}': self.config['palo_alto']['panorama']['PanoramaTemplateStack'],
             '{PanoramaDeviceGroup}': self.config['palo_alto']['panorama']['PanoramaDeviceGroup'],
         }
 

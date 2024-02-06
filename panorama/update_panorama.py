@@ -7,19 +7,128 @@ import time
 import json
 
 class UpdatePanorama:
-    def __init__(self, stack_name, dg_name, token, base_url, state_data):
+    def __init__(self, template, stack_name, dg_name, token, base_url, state_data):
+        self.template = template
         self.stack_name = stack_name
         self.dg_name = dg_name
         self.token = token
         self.base_url = base_url
         self.state_data = state_data
 
+    def set_base_variable(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
+    def set_ike_crypto_profile(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
+    def set_ipsec_crypto_profile(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
+    def set_ike_gateway(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
+    def set_tunnel_interface(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
+    def set_ipsec_tunnel(self, logger):
+        # Set all variables to template based on the first instance, eventually each device will be overwritten.
+        first_instance_data = next(iter(self.state_data.values()))
+        for key, value in first_instance_data.items():
+            variable_name = key
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/variable/entry[@name='${variable_name}']/type"
+            element = f"<ip-netmask>{value}</ip-netmask>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=False)
+            #
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Variable {variable_name} set {status}")
+            else:
+                logger.error(f"Response from Panorama:\n{response.text}")
+
     def get_devices(self, logger):
         devices_list = []
         try:
             headers = {'X-PAN-KEY': self.token}
             payload = {'type': 'op', 'cmd': '<show><devices><all/></devices></show>'}
-            logger.info(f"Request to Panorama: {headers}{payload}")
+            logger.debug(f"Request to Panorama: {headers}{payload}")
             response = requests.post(self.base_url, headers=headers, params=payload, verify=False)
             logger.info(f"Response from Panorama:\n{response.text}")
             root = ET.fromstring(response.content)
@@ -38,7 +147,7 @@ class UpdatePanorama:
             logger.error(f"Error while trying to get devices: {e}")
             return []
 
-    def update_panorama_variables(self, logger, max_retries=150, delay=15):
+    def update_panorama_variables(self, logger, max_retries=240, delay=15):
         # Initialize all devices in state_data as not connected
         for _, details in self.state_data.items():
             details['is_connected'] = False
@@ -77,37 +186,29 @@ class UpdatePanorama:
         self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
         self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
         self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
+        self.update_variable(serial, '$gp_pool', details['gp_pool'], logger)
         logger.info(f"Updated variables for device with serial {serial}.")
 
     def update_variable(self, serial, variable_name, value, logger):
         # XPath
         xpath = f"/config/devices/entry[@name='localhost.localdomain']/template-stack/entry[@name='{self.stack_name}']/devices/entry[@name='{serial}']/variable/entry[@name='{variable_name}']/type"
-
         # XML element
         element = f"<ip-netmask>{value}</ip-netmask>"
-
         # Payload
-        payload = {
-            'type': 'config',
-            'action': 'set',
-            'key': self.token,
-            'xpath': xpath,
-            'element': element
-        }
-
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
         # Log the request content
-        logger.info(f"Request to Panorama: {payload}")
-
+        logger.debug(f"Request to Panorama: {payload}")
         # Make the request and log the response
         response = requests.post(self.base_url, params=payload, verify=False)
-        logger.debug(f"Response from Panorama:\n{response.text}")
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.info(f"Variable device override {variable_name} set {status}")
+        else:
+            logger.error(f"Response from Panorama:\n{response.text}")
     
     def commit_panorama(self, logger):
-        payload = {
-            'type': 'commit',
-            'cmd': '<commit></commit>',
-            'key': self.token
-        }
+        payload = {'type': 'commit', 'cmd': '<commit></commit>', 'key': self.token }
         response = requests.post(self.base_url, params=payload, verify=False)
         logger.info(f"Response from commit operation:\n{response.text}")
         
@@ -116,13 +217,9 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=90):
-        payload = {
-            'type': 'commit',
-            'action': 'all',
-            'cmd': f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>',
-            'key': self.token
-        }
+    def commit_dg_tpl_stack(self, logger, delay=120):
+        cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
+        payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay} seconds for devices to stablize during onboarding')
         time.sleep(delay)
         response = requests.post(self.base_url, params=payload, verify=False)
@@ -135,11 +232,8 @@ class UpdatePanorama:
 
     def check_commit_status(self, job_id, logger, max_retries=30, delay=10):
         for attempt in range(max_retries):
-            payload = {
-                'type': 'op',
-                'cmd': f'<show><jobs><id>{job_id}</id></jobs></show>',
-                'key': self.token
-            }
+            cmd = f'<show><jobs><id>{job_id}</id></jobs></show>'
+            payload = {'type': 'op', 'cmd': cmd, 'key': self.token}
             response = requests.post(self.base_url, params=payload, verify=False)
             logger.info(f"Response from job status check:\n{response.text}")
 
@@ -180,6 +274,9 @@ class UpdatePanorama:
         
         # Get the logger
         logger = logging.getLogger()
+
+        # Set Template Variables
+        self.set_base_variable(logger)
 
         # Call methods to update Panorama variables
         self.update_panorama_variables(logger)
