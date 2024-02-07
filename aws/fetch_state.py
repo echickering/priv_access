@@ -102,10 +102,12 @@ class FetchState:
             processed_data[f'instance{instance_num}'] = {
                 'public_untrust_ip': public_untrust_ip,
                 'untrust_ip': untrust_ip,  # Includes CIDR
+                'untrust_ip_base': untrust_ip_base,  # IP No CIDR
                 'untrust_router_id': untrust_ip_base, #RouterID for Untrust VR
                 'untrust_nexthop': untrust_nexthop,
                 'trust_nexthop': trust_nexthop,
                 'trust_ip': trust_ip,      # Includes CIDR
+                'trust_ip_base': trust_ip_base, #Ip without CIDR
                 'trust_secondary_ip': trust_secondary_ip,  # Secondary trust IP
                 'mgmt_ip': mgmt_ip,
                 'gp_pool': gp_pool

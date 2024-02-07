@@ -87,7 +87,7 @@ def main():
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(template_name, tpl_stack_name, dg_name, token, base_url, state_data)
+    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
