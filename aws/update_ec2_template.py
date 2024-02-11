@@ -32,92 +32,45 @@ class UpdateEc2Template:
         with open(file_path, 'w') as file:
             yaml.dump(data, file, Dumper=yaml.SafeDumper, sort_keys=False)
 
-    def replace_refs_in_text(self, file_path):
-        """
-        Parse the template file as text and replace 'Ref:', 'Fn::GetAtt:', and 'Fn::Sub:' 
-        with '!Ref', '!GetAtt', and '!Sub' respectively.
-        """
-        with open(file_path, 'r') as file:
-            content = file.read()
-        
-        # Replace 'Ref:' with '!Ref'
-        updated_content = content.replace('Ref:', '!Ref')
-
-        # Replace 'Fn::GetAtt:' with '!GetAtt'
-        updated_content = updated_content.replace('Fn::GetAtt:', '!GetAtt')
-
-        # Replace 'Fn::Sub:' with '!Sub'
-        updated_content = updated_content.replace('Fn::Sub:', '!Sub')
-
-        # Write the updated content back to the file
-        with open(file_path, 'w') as file:
-            file.write(updated_content)
-
     def update_templates(self):
-        for region, settings in self.config['aws']['Regions'].items():
-            min_count = settings.get('min_ec2_count', 1)  # Default to 1 if not specified
-            max_count = settings.get('max_ec2_count', 1)  # Default to 1 if not specified
+        for region, region_config in self.config['aws']['Regions'].items():
+            logging.info(f"Processing Region: {region}")
+            original_template = self.load_yaml_file(self.base_template_path)
 
-            # Adjust min_ec2_count if it exceeds max_ec2_count
-            if min_count > max_count:
-                logging.warning(f"min_ec2_count ({min_count}) is greater than max_ec2_count ({max_count}) for region {region}. Setting min_ec2_count to max_ec2_count.")
-                min_count = max_count  # Set min_ec2_count to max_ec2_count
+            global_resource_count = 1  # Initialize with 1 for the first set of resources
 
-            # Continue with template update
-            template = self.load_yaml_file(self.base_template_path)
-            self.prepare_template_for_count(template, min_count)
+            for az, az_config in region_config['availability_zones'].items():
+                logging.info(f"Processing AZ: {az} in Region: {region}")
+                min_count = az_config.get('min_ec2_count', 1)
 
-            # Write the updated template to the regional template file
+                for count in range(1, min_count + 1):
+                    self.duplicate_resources(original_template, global_resource_count, duplicate_all=True)
+                    global_resource_count += 1  # Increment for the next set of resources
+
+            # Write the updated template to the regional template file, once all AZs are processed
             regional_template_path = os.path.join(self.output_dir, f"{region}_ec2_template.yml")
-            self.write_yaml_file(template, regional_template_path)
+            self.write_yaml_file(original_template, regional_template_path)
+            logging.info(f"Combined Template updated for Region {region}: {regional_template_path}")
 
-            # Apply text replacements for 'Ref:', 'Fn::GetAtt:', and 'Fn::Sub:'
-            self.replace_refs_in_text(regional_template_path)
-            logging.info(f"Template updated for {region}: {regional_template_path}")
+    def duplicate_resources(self, template, count, duplicate_all=True):
+        def update_name_and_refs(content, old_suffix, new_suffix):
+            if isinstance(content, str) and old_suffix in content:
+                return content.replace(old_suffix, new_suffix)
+            elif isinstance(content, dict):
+                return {k: update_name_and_refs(v, old_suffix, new_suffix) for k, v in content.items()}
+            elif isinstance(content, list):
+                return [update_name_and_refs(item, old_suffix, new_suffix) for item in content]
+            return content
 
-    def prepare_template_for_count(self, template, min_count):
-        for count in range(2, min_count + 1):
-            self.duplicate_resources(template, count)
-
-    def duplicate_resources(self, template, count):
-        # Duplicate resources
-        new_resources = {}
-        for resource_name, resource_content in template['Resources'].items():
-            if resource_name.endswith('1'):
-                new_resource_name = resource_name[:-1] + str(count)
-                new_resource_content = copy.deepcopy(resource_content)
-                self.update_references(new_resource_content, '1', str(count))
-                new_resources[new_resource_name] = new_resource_content
-        template['Resources'].update(new_resources)
-
-        # Duplicate outputs
-        new_outputs = {}
-        for output_name, output_content in template.get('Outputs', {}).items():
-            if output_name.endswith('1'):
-                new_output_name = output_name[:-1] + str(count)
-                new_output_content = copy.deepcopy(output_content)
-                self.update_references(new_output_content, '1', str(count))
-                new_outputs[new_output_name] = new_output_content
-        template['Outputs'].update(new_outputs)
-
-
-    def update_references(self, resource_content, old_suffix, new_suffix):
-        if isinstance(resource_content, dict):
-            for key, value in resource_content.items():
-                if key == '!GetAtt' and isinstance(value, list):
-                    # Update the resource name in the list if it ends with the old suffix
-                    updated_list = [v.replace(old_suffix, new_suffix) if v.endswith(old_suffix) else v for v in value]
-                    resource_content[key] = updated_list
-                elif isinstance(value, str) and value.endswith(old_suffix):
-                    resource_content[key] = value.replace(old_suffix, new_suffix)
-                elif isinstance(value, (list, dict)):
-                    self.update_references(value, old_suffix, new_suffix)
-        elif isinstance(resource_content, list):
-            for i, item in enumerate(resource_content):
-                if isinstance(item, str) and item.endswith(old_suffix):
-                    resource_content[i] = item.replace(old_suffix, new_suffix)
-                else:
-                    self.update_references(item, old_suffix, new_suffix)
+        # Always duplicate all sections for each instance
+        for section in ['Parameters', 'Resources', 'Outputs']:
+            new_items = {}
+            for name, item in template.get(section, {}).items():
+                if name.endswith('1'):  # Identifies items intended for duplication
+                    new_name = name[:-1] + str(count)  # Adjust the name for duplication
+                    new_item = copy.deepcopy(item)
+                    new_items[new_name] = update_name_and_refs(new_item, '1', str(count))
+            template[section].update(new_items)
 
 if __name__ == '__main__':
     config_path = os.path.join(os.path.dirname(__file__), 'config', 'config.yml')

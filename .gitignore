@@ -18,6 +18,7 @@ __pycache__/
 # Python scripts to ignore
 find_xpath.py
 deploy_vpc2.py
+deploy_vpc3.py
 deploy_ec22.py
 ec2_deployer.py
 fetch_state2.py

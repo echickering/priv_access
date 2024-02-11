@@ -2,9 +2,37 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: A template to create a VPC, a subnet, and an Internet Gateway.
 
 Parameters:
+  NamePrefix:
+    Description: All resources created will have this prefix in its name
+    Type: String
+  VpcName:
+    Description: Name for VPC
+    Type: String
   VpcCidr:
     Description: The CIDR block for the VPC
     Type: String
+  AvailabilityZone:
+    Description: The Availability Zone where the subnets will be created
+    Type: String
+  Subnet1Cidr:
+    Description: The CIDR block for the vpc subnet
+    Type: String
+  Subnet2Cidr:
+    Description: The CIDR block for the vpc subnet
+    Type: String
+  TgwId:
+    Description: The ID of TGW to attach VPC to
+    Type: String
+    Default: ""
+  TgwCidr:
+    Description: The CIDR defined to TGW
+    Type: String
+    Default: ""
+
+Conditions:
+  CreateTgwResources: !And 
+    - !Not [!Equals [!Ref TgwId, ""]]
+    - !Not [!Equals [!Ref TgwCidr, ""]]
 
 Resources:
   MyVPC:
@@ -15,27 +43,164 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: MyVPC
+          Value: !Ref VpcName
 
-  MySubnet:
+  Subnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref MyVPC
-      CidrBlock: !Ref VpcCidr
+      CidrBlock: !Ref Subnet1Cidr
+      AvailabilityZone: !Ref AvailabilityZone
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: MySubnet
+          Value: !Sub "${NamePrefix}Untrust"
+
+  Subnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: !Ref Subnet2Cidr
+      AvailabilityZone: !Ref AvailabilityZone
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${NamePrefix}Trust"
 
   InternetGateway:
     Type: 'AWS::EC2::InternetGateway'
     Properties:
       Tags:
         - Key: Name
-          Value: MyInternetGateway
+          Value: !Sub "${NamePrefix}IGW"
 
   GatewayAttachment:
     Type: 'AWS::EC2::VPCGatewayAttachment'
     Properties:
       VpcId: !Ref MyVPC
       InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${NamePrefix}PublicRTB"
+
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${NamePrefix}PrivateRTB"
+
+  Subnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  Subnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  DefaultRoutePublic:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  DefaultRoutePrivate:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  TgwCidrRoute:
+    Type: 'AWS::EC2::Route'
+    Condition: CreateTgwResources
+    DependsOn:
+      - "TgwAttach"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: !Ref TgwCidr
+      TransitGatewayId: !Ref TgwId
+
+  TgwAttach:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Condition: CreateTgwResources
+    Properties:
+      Options: 
+        DnsSupport: enable
+      SubnetIds: 
+        - !Ref Subnet1
+      Tags: 
+        - Key: Name
+          Value: !Sub "${NamePrefix}TGWAttach"
+      TransitGatewayId: !Ref TgwId
+      VpcId: !Ref MyVPC
+
+  TgwRtb:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Condition: CreateTgwResources
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: !Sub "${NamePrefix}Rtb"
+      TransitGatewayId: !Ref TgwId
+
+  TgwRtbAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Condition: CreateTgwResources
+    Properties:
+      TransitGatewayAttachmentId: !Ref TgwAttach
+      TransitGatewayRouteTableId: !Ref TgwRtb
+
+Outputs:
+  VpcId:
+    Description: The ID of the created VPC
+    Value: !Ref MyVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+
+  Subnet1Id:
+    Description: The ID of the first Subnet
+    Value: !Ref Subnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-Subnet1Id"
+
+  Subnet1Cidr:
+    Description: The CIDR of the first Subnet
+    Value: !Ref Subnet1Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-Subnet1Cidr"
+
+  Subnet2Id:
+    Description: The ID of the second Subnet
+    Value: !Ref Subnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-Subnet2Id"
+
+  Subnet2Cidr:
+    Description: The CIDR of the first Subnet
+    Value: !Ref Subnet2Cidr
+    Export:
+      Name: !Sub "${AWS::StackName}-Subnet2Cidr"
+
+  TgwRtb:
+    Description: RTB Associated GP VPC
+    Condition: CreateTgwResources
+    Value: !Ref TgwRtb
+
+  TgwCidr:
+    Description: CIDR Associated to TGW
+    Condition: CreateTgwResources
+    Value: !Ref TgwCidr

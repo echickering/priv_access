@@ -21,8 +21,8 @@ class EC2Deployer:
             return yaml.safe_load(file)['aws_credentials']
 
     # This function now takes an additional parameter for the region
-    def load_template_for_region(self, region):
-        template_path = os.path.join(self.output_dir, f"{region}_ec2_template.yml")
+    def load_template_for_region(self, region_az_config):
+        template_path = os.path.join(self.output_dir, f"{region_az_config}_ec2_template.yml")
         with open(template_path, 'r') as file:
             return file.read()
 
@@ -34,13 +34,13 @@ class EC2Deployer:
         )
         self.cf_client = session.client('cloudformation')
 
-    def prepare_user_data(self, region):
+    def prepare_user_data(self, az):
         # Retrieve the base user_data template from the configuration
         user_data_template = self.config['aws']['EC2']['user_data']
         
         # Dynamic values to replace in the user_data template
         replacements = {
-            '{NamePrefix}': self.config['aws']['NamePrefix'] + region,
+            '{NamePrefix}': self.config['aws']['NamePrefix'] + az,
             '{panorama_auth_key}': self.config['palo_alto']['panorama']['auth_key'],
             '{panorama_ip_address1}': self.config['palo_alto']['panorama']['ip_address1'],
             '{panorama_ip_address2}': self.config['palo_alto']['panorama']['ip_address2'],
@@ -75,28 +75,14 @@ class EC2Deployer:
 
     def deploy_stack(self, region):
         self.setup_client(region)
-        region_config = self.config['aws']['Regions'][region]
-        stack_name = self.config['aws']['StackNameEC2']
-        template_body = self.load_template_for_region(region)  # Load the region-specific template
+        template_body = self.load_template_for_region(region)  # Use region name to fetch the correct template
+        vpc_stack_outputs = self.get_vpc_stack_outputs(region)  # Fetch VPC stack outputs for the region
 
-        user_data_encoded = self.prepare_user_data(region)
+        parameters = self.construct_parameters_for_region(region, vpc_stack_outputs)
 
-        # Fetch subnet IDs and VPC ID from VPC stack outputs
-        vpc_stack_outputs = self.get_vpc_stack_outputs(region)
-        subnet1_id = vpc_stack_outputs.get('Subnet1Id', '')
-        subnet2_id = vpc_stack_outputs.get('Subnet2Id', '')
-        vpc_id = vpc_stack_outputs.get('VpcId', '')  # Fetch VPC ID
+        logging.debug(f'Region:{region} Parameters: {parameters}')
 
-        parameters = [
-            {'ParameterKey': 'AMIId', 'ParameterValue': region_config['ngfw_ami_id']},
-            {'ParameterKey': 'InstanceType', 'ParameterValue': self.config['aws']['EC2']['instance_type']},
-            {'ParameterKey': 'KeyName', 'ParameterValue': region_config['key_name']},
-            {'ParameterKey': 'EC2UserData', 'ParameterValue': user_data_encoded},
-            {'ParameterKey': 'Subnet1Id', 'ParameterValue': subnet1_id},
-            {'ParameterKey': 'Subnet2Id', 'ParameterValue': subnet2_id},
-            {'ParameterKey': 'MyVpcId', 'ParameterValue': vpc_id},  # Include VPC ID parameter
-            {'ParameterKey': 'InstanceName', 'ParameterValue': f"{self.config['aws']['NamePrefix']}{region}-VM"}
-        ]
+        stack_name = f"{self.config['aws']['StackNameEC2']}"  # Define stack name
 
         try:
             # Try to update the stack first
@@ -138,6 +124,40 @@ class EC2Deployer:
 
         logging.info(f"Stack {stack_name} {action.lower()} successfully in {region}.")
         return {"Status": action, "StackId": response['StackId']}
+
+    def construct_parameters_for_region(self, region, vpc_stack_outputs):
+        region_config = self.config['aws']['Regions'][region]
+        user_data_encoded = self.prepare_user_data(region)  # Encode user data for the entire region
+
+        parameters = [
+            {'ParameterKey': 'EC2UserData', 'ParameterValue': user_data_encoded},
+            {'ParameterKey': 'MyVpcId', 'ParameterValue': vpc_stack_outputs.get('VpcId', '')},
+            {'ParameterKey': 'KeyName', 'ParameterValue': region_config['key_name']},
+            {'ParameterKey': 'AMIId', 'ParameterValue': region_config['ngfw_ami_id']},
+        ]
+
+        # Initialize counters
+        ec2_counter = 1  # Counts total EC2 instances across all AZs
+        az_counter = 1   # Counts AZs to reference the correct subnet IDs
+
+        # Iterate through each AZ
+        for az, az_config in region_config['availability_zones'].items():
+            min_ec2_count = az_config.get('min_ec2_count', 1)
+            
+            # Iterate through each instance in the AZ
+            for _ in range(min_ec2_count):
+                parameters += [
+                    {'ParameterKey': f'UnTrustID{ec2_counter}', 'ParameterValue': vpc_stack_outputs.get(f'UnTrustID{az_counter}', '')},
+                    {'ParameterKey': f'TrustID{ec2_counter}', 'ParameterValue': vpc_stack_outputs.get(f'TrustID{az_counter}', '')},
+                    {'ParameterKey': f'InstanceName{ec2_counter}', 'ParameterValue': f"{self.config['aws']['NamePrefix']}{region}-VM{ec2_counter}"},
+                    {'ParameterKey': f'NetworkBorderGroupValue{ec2_counter}', 'ParameterValue': az_config['NetworkBorderGroup']},
+                    {'ParameterKey': f'InstanceType{ec2_counter}', 'ParameterValue': az_config['instance_type']}
+                ]
+                ec2_counter += 1  # Increment for the next EC2 instance
+            
+            az_counter += 1  # Increment after processing all instances in the AZ
+
+        return parameters
 
     def deploy(self):
         # Loop through each region defined in the config and deploy the stack for that region

@@ -25,7 +25,7 @@ class VPCDeployer:
             action = "Update Initiated"
         except cf_client.exceptions.ClientError as error:
             if error.response['Error']['Message'] == 'No updates are to be performed.':
-                logging.info("No VPC updates are to be performed.")
+                logging.info("No VPC updates are needed to be performed.")
                 return {"Status": "No Update Needed"}
             elif 'does not exist' in error.response['Error']['Message']:
                 logging.info(f"Creating stack {stack_name}...")
@@ -57,7 +57,7 @@ class VPCDeployer:
         self.aws_credentials = aws_creds['aws_credentials']
         self.name_prefix = self.config['aws']['NamePrefix']  # Initialize name_prefix here
 
-        logging.info(f"Debug: config={self.config}, name_prefix={self.name_prefix}")
+        logging.debug(f"Debug of load_config: config={self.config}, name_prefix={self.name_prefix}")
 
         # Call the main method directly instead of creating a new instance
         self.main()
@@ -66,7 +66,6 @@ class VPCDeployer:
         for region, region_config in self.config['aws']['Regions'].items():
             logging.info(f"Deploying VPC in region: {region}")
 
-            # Check if name_prefix is None before using it
             if self.name_prefix is not None:
                 vpc_name = self.name_prefix + region.replace('-', '')
             else:
@@ -79,42 +78,43 @@ class VPCDeployer:
                 region_name=region
             )
 
-            with open('config/vpc_template.yml', 'r') as file:
+            with open(f'config/{region}_vpc_template.yml', 'r') as file:
                 template_body = file.read()
 
             cf_client = boto3.client('cloudformation')
-            cf_parameters = [
-                {
-                    'ParameterKey': 'NamePrefix',
-                    'ParameterValue': self.config['aws']['NamePrefix']
-                },
-                {
-                    'ParameterKey': 'VpcName',
-                    'ParameterValue': vpc_name
-                },
-                {
-                    'ParameterKey': 'AvailabilityZone',
-                    'ParameterValue': region_config['availability_zone']  # Ensure this is defined in your config
-                },
-                {
-                    'ParameterKey': 'VpcCidr',
-                    'ParameterValue': region_config['vpc_cidr']
-                },
-                {
-                    'ParameterKey': 'Subnet1Cidr',
-                    'ParameterValue': region_config['subnet1_cidr_block']
-                },
-                {
-                    'ParameterKey': 'Subnet2Cidr',
-                    'ParameterValue': region_config['subnet2_cidr_block']
-                }
-            ]
 
-            result = self.deploy_stack(cf_client, template_body, cf_parameters, stack_name=self.config['aws']['StackName'])
+            base_cf_parameters = [
+                {'ParameterKey': 'NamePrefix', 'ParameterValue': self.config['aws']['NamePrefix']},
+                {'ParameterKey': 'VpcName', 'ParameterValue': vpc_name},
+                {'ParameterKey': 'VpcCidr', 'ParameterValue': region_config['vpc_cidr']}
+            ]
+            az_parameters = []
+            count = 0
+            for az, az_config in region_config['availability_zones'].items():
+                # Conditionally add Second availability zone and its dependents
+                count += 1
+                logging.debug(f'Current AZ: {az}')
+                if 'az_name' in az_config:
+                    az_parameters.append({'ParameterKey': f'AvailabilityZone{count}', 'ParameterValue': az_config['az_name']})
+                if 'subnet1_cidr_block' in az_config:
+                    az_parameters.append({'ParameterKey': f'UnTrustCidr{count}', 'ParameterValue': az_config['subnet1_cidr_block']})
+                if 'subnet2_cidr_block' in az_config:
+                    az_parameters.append({'ParameterKey': f'TrustCidr{count}', 'ParameterValue': az_config['subnet2_cidr_block']})
+
+                # Conditionally add TgwId and TgwCidr if they exist in the config
+                if 'tgw_id' in az_config:
+                    az_parameters.append({'ParameterKey': 'TgwId', 'ParameterValue': az_config['tgw_id']})
+                if 'tgw_cidr' in az_config:
+                    az_parameters.append({'ParameterKey': 'TgwCidr', 'ParameterValue': az_config['tgw_cidr']})
+                              
+            full_parameters = base_cf_parameters + az_parameters
+
+            logging.info(f'Full CF Parameters: {full_parameters}')
+            result = self.deploy_stack(cf_client, template_body, full_parameters, stack_name=self.config['aws']['StackName'])
 
             if result:
                 if result['Status'] in ["Update Initiated", "Creation Initiated"]:
-                    logging.info(f"Stack deployment initiated in {region}: {result['StackId']}")
+                    logging.info(f"Stack deployment completed in {region}: {result['StackId']}")
                 elif result['Status'] == "No Update Needed":
                     logging.info(f"No update was needed for the stack in {region}.")
             else:

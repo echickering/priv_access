@@ -1,4 +1,3 @@
-# project/aws/fetch_state2.py
 import boto3
 import yaml
 import ipaddress
@@ -30,98 +29,42 @@ class FetchState:
             stack_info = cf_client.describe_stacks(StackName=stack_name)
             outputs = stack_info['Stacks'][0]['Outputs']
             outputs_dict = {output['OutputKey']: output['OutputValue'] for output in outputs}
-            
-            # Debug logging to show fetched outputs
             logging.debug(f"Fetched stack outputs for {stack_name} in {region}: {outputs_dict}")
-            
             return outputs_dict
         except Exception as e:
             logging.error(f"Error fetching outputs for stack {stack_name} in region {region}: {e}")
             return {}
 
-    def get_first_usable_ip(self, cidr):
+    def get_first_usable_ip_and_netmask(self, cidr):
         network = ipaddress.ip_network(cidr)
         first_usable_ip = next(network.hosts())
-        return str(first_usable_ip)
+        netmask = network.prefixlen
+        return str(first_usable_ip), str(netmask)
 
     def process_vpc_subnet_data(self, region):
         vpc_stack_name = self.config['aws']['StackName']
         vpc_outputs = self.fetch_stack_outputs(region, vpc_stack_name)
+        subnet_data = {}
+        az_counter = 1  # Counter based on the number of AZs in the region
 
-        untrust_nexthop = self.get_first_usable_ip(vpc_outputs['Subnet1Cidr'])
-        trust_nexthop = self.get_first_usable_ip(vpc_outputs['Subnet2Cidr'])
-        return untrust_nexthop, trust_nexthop
+        for az in self.config['aws']['Regions'][region]['availability_zones']:
+            # Fetch the subnet CIDR outputs from the VPC stack
+            untrust_cidr_key = f'UnTrustCidr{az_counter}'
+            trust_cidr_key = f'TrustCidr{az_counter}'
 
-    def extract_cidr_suffix(self, cidr):
-        """Extract and return the CIDR suffix from a CIDR string."""
-        try:
-            _, suffix = cidr.split('/')
-            return suffix
-        except ValueError:
-            logging.error(f"Invalid CIDR format: {cidr}")
-            return None
+            # Get the first usable IP and netmask for each subnet CIDR
+            untrust_nexthop, untrust_netmask = self.get_first_usable_ip_and_netmask(vpc_outputs.get(untrust_cidr_key, ''))
+            trust_nexthop, trust_netmask = self.get_first_usable_ip_and_netmask(vpc_outputs.get(trust_cidr_key, ''))
 
-    def process_ec2_interface_data(self, region):
-        ec2_stack_name = self.config['aws']['StackNameEC2']
-        ec2_outputs = self.fetch_stack_outputs(region, ec2_stack_name)
-
-        # Fetch Subnet CIDRs for appending
-        vpc_stack_name = self.config['aws']['StackName']
-        vpc_outputs = self.fetch_stack_outputs(region, vpc_stack_name)
-        subnet1_cidr = vpc_outputs.get('Subnet1Cidr', '')
-        subnet2_cidr = vpc_outputs.get('Subnet2Cidr', '')
-
-        # Extract the CIDR suffix from Subnet CIDRs
-        untrust_subnet_mask = self.extract_cidr_suffix(subnet1_cidr)
-        trust_subnet_mask = self.extract_cidr_suffix(subnet2_cidr)
-
-        # Determine max EC2 count from config.yml
-        max_ec2 = self.config['aws']['Regions'][region]['max_ec2_count']+1
-
-        processed_data = {}
-        
-        # Assuming instance numbers are sequential and start from 1
-        for instance_num in range(1, max_ec2):  # Adjust based on possible max instances
-            public_untrust_ip = ec2_outputs.get(f'PublicEIP{instance_num}')
-            untrust_ip_base, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{instance_num}'))
-            untrust_ip = f"{untrust_ip_base}/{untrust_subnet_mask}" if untrust_ip_base and trust_subnet_mask else None
-            mgmt_ip, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'MgmtInterface{instance_num}'))
-            trust_ip_base, trust_secondary_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{instance_num}'))
-            trust_ip = f"{trust_ip_base}/{trust_subnet_mask}" if trust_ip_base and trust_subnet_mask else None
-            logging.debug(f'Secondary IP returned to process_ec2_interfaces_data: {trust_secondary_ip}')
-            gp_pool = self.config['aws']['Regions'][region]['globalprotect'][f'user_pool{instance_num}']
-            on_prem_vpn_settings = self.config['vpn']['on_prem_vpn_settings']
-            logging.info(f'Fetch State Current GP Pool: {gp_pool}')
-            untrust_nexthop, trust_nexthop = self.process_vpc_subnet_data(region)
-
-            # Correctly append the secondary IP to the state data
-            if not all([public_untrust_ip, untrust_ip, trust_ip, mgmt_ip]):
-                logging.debug(f"Partial or no data fetched for EC2 instance {instance_num} in region {region}. Skipping.")
-                continue
-
-            processed_data[f'instance{instance_num}'] = {
-                'public_untrust_ip': public_untrust_ip,
-                'untrust_ip': untrust_ip,  # Includes CIDR
-                'untrust_ip_base': untrust_ip_base,  # IP No CIDR
-                'untrust_router_id': untrust_ip_base, #RouterID for Untrust VR
+            subnet_data[az] = {
                 'untrust_nexthop': untrust_nexthop,
                 'trust_nexthop': trust_nexthop,
-                'trust_ip': trust_ip,      # Includes CIDR
-                'trust_ip_base': trust_ip_base, #Ip without CIDR
-                'trust_secondary_ip': trust_secondary_ip,  # Secondary trust IP
-                'mgmt_ip': mgmt_ip,
-                'gp_pool': gp_pool
+                'untrust_netmask': untrust_netmask,  # Include the CIDR netmask
+                'trust_netmask': trust_netmask       # Include the CIDR netmask
             }
-            # Dynamically adding on-prem VPN settings to the processed_data
-            for site, ip in on_prem_vpn_settings.items():
-                processed_data[f'instance{instance_num}'][site] = ip
-        logging.info(f'Current state: {processed_data}')
-        if not processed_data:
-            logging.error(f"No valid EC2 instance data found in region {region}.")
-            return {}  # Return an empty dict if no valid data was found for any instance
+            az_counter += 1  # Increment for each AZ processed
 
-        logging.debug(f'State Data from class FetchState: {processed_data}')
-        return processed_data
+        return subnet_data
 
     def fetch_eni_private_ip(self, region, eni_id):
         if eni_id is None:
@@ -132,8 +75,9 @@ class FetchState:
             eni_info = ec2_client.describe_network_interfaces(NetworkInterfaceIds=[eni_id])
             logging.debug(f'Interface details: {eni_info}')
             private_ip = eni_info['NetworkInterfaces'][0]['PrivateIpAddress']
-            secondary_ips = eni_info['NetworkInterfaces'][0].get('PrivateIpAddresses', [])[1:2]  # Get the first secondary IP if exists
-            secondary_ip = f"{secondary_ips[0]['PrivateIpAddress']}/32" if secondary_ips else None
+            # Correctly handle secondary IPs
+            secondary_ips = [ip['PrivateIpAddress'] for ip in eni_info['NetworkInterfaces'][0]['PrivateIpAddresses'] if not ip['Primary']]
+            secondary_ip = f"{secondary_ips[0]}/32" if secondary_ips else None  # Correctly fetch the first secondary IP
             logging.debug(f'Secondary IP from fetch_eni_private_ip: {secondary_ip}')
             return private_ip, secondary_ip
         except Exception as e:
@@ -142,10 +86,58 @@ class FetchState:
 
     def fetch_and_process_state(self):
         state = {}
+
         for region in self.config['aws']['Regions']:
-            # your existing logic to process each region and instance
-            instance_data = self.process_ec2_interface_data(region)
-            for instance_num, data in instance_data.items():
-                # Build the state with data already including dynamic keys
-                state[f'{region}_instance_{instance_num}'] = data
+            # Fetch VPC subnet data to get next-hop information and netmasks
+            vpc_subnet_data = self.process_vpc_subnet_data(region)
+
+            ec2_counter = 1  # Reset counter for each region
+            ec2_stack_name = f"{self.config['aws']['StackNameEC2']}"
+            ec2_outputs = self.fetch_stack_outputs(region, ec2_stack_name)
+
+            for az, az_data in vpc_subnet_data.items():
+                untrust_nexthop = az_data['untrust_nexthop']
+                trust_nexthop = az_data['trust_nexthop']
+                untrust_netmask = az_data['untrust_netmask']
+                trust_netmask = az_data['trust_netmask']
+                gp_counter = 1
+
+                for instance_num in range(1, self.config['aws']['Regions'][region]['availability_zones'][az]['min_ec2_count'] + 1):
+                    public_untrust_ip = ec2_outputs.get(f'PublicEIP{ec2_counter}')
+                    untrust_ip_base, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{ec2_counter}'))
+                    mgmt_ip, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'MgmtInterface{ec2_counter}'))
+                    trust_ip_base, secondary_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{ec2_counter}'))
+
+                    # Incorporate netmask information directly
+                    untrust_ip = f"{untrust_ip_base}/{untrust_netmask}" if untrust_ip_base else None
+                    untrust_ip_single = f"{untrust_ip_base}" if untrust_ip_base else None
+                    trust_ip = f"{trust_ip_base}/{trust_netmask}" if trust_ip_base else None
+                    trust_ip_single = f"{trust_ip_base}" if trust_ip_base else None
+
+                    # Dynamically fetch the user pool based on EC2 counter
+                    gp_pool_key = f'user_pool{gp_counter}'
+                    gp_pool = self.config['aws']['Regions'][region]['availability_zones'][az]['globalprotect'].get(gp_pool_key, 'N/A')
+                    gp_counter += 1
+
+                    state[f'{region}_{az}_instance_{ec2_counter}'] = {
+                        'public_untrust_ip': public_untrust_ip,
+                        'untrust_ip': untrust_ip,
+                        'untrust_ip_base': untrust_ip_single,
+                        'untrust_router_id': untrust_ip_single,
+                        'untrust_nexthop': untrust_nexthop,
+                        'trust_ip': trust_ip,
+                        'trust_ip_base': trust_ip_single,
+                        'trust_secondary_ip': secondary_ip,
+                        'trust_nexthop': trust_nexthop,
+                        'mgmt_ip': mgmt_ip,
+                        'gp_pool': gp_pool,
+                    }
+                    ec2_counter += 1
+
         return state
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    fetch_state = FetchState(config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml')
+    state = fetch_state.fetch_and_process_state()
+    print(state)
