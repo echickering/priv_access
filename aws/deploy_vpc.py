@@ -93,13 +93,15 @@ class VPCDeployer:
             for az, az_config in region_config['availability_zones'].items():
                 # Conditionally add Second availability zone and its dependents
                 count += 1
-                logging.debug(f'Current AZ: {az}')
+                logging.info(f'Current AZ: {az}')
+                az_key = az.split(region)[-1].replace('-','')
+                logging.debug(f'AZ Name Key: {az_key}')
                 if 'az_name' in az_config:
-                    az_parameters.append({'ParameterKey': f'AvailabilityZone{count}', 'ParameterValue': az_config['az_name']})
-                if 'subnet1_cidr_block' in az_config:
-                    az_parameters.append({'ParameterKey': f'UnTrustCidr{count}', 'ParameterValue': az_config['subnet1_cidr_block']})
-                if 'subnet2_cidr_block' in az_config:
-                    az_parameters.append({'ParameterKey': f'TrustCidr{count}', 'ParameterValue': az_config['subnet2_cidr_block']})
+                    az_parameters.append({'ParameterKey': f'AvailabilityZone{az_key}', 'ParameterValue': az_config['az_name']})
+                if 'untrust_subnet_cidr' in az_config:
+                    az_parameters.append({'ParameterKey': f'UnTrustCidrAZ{az_key}', 'ParameterValue': az_config['untrust_subnet_cidr']})
+                if 'trust_subnet_cidr' in az_config:
+                    az_parameters.append({'ParameterKey': f'TrustCidrAZ{az_key}', 'ParameterValue': az_config['trust_subnet_cidr']})
 
                 # Conditionally add TgwId and TgwCidr if they exist in the config
                 if 'tgw_id' in az_config:

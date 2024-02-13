@@ -49,8 +49,9 @@ class FetchState:
 
         for az in self.config['aws']['Regions'][region]['availability_zones']:
             # Fetch the subnet CIDR outputs from the VPC stack
-            untrust_cidr_key = f'UnTrustCidr{az_counter}'
-            trust_cidr_key = f'TrustCidr{az_counter}'
+            az_suffix = az.split(region)[-1].replace('-', '')
+            untrust_cidr_key = f'UnTrustCidrAZ{az_suffix}'
+            trust_cidr_key = f'TrustCidrAZ{az_suffix}'
 
             # Get the first usable IP and netmask for each subnet CIDR
             untrust_nexthop, untrust_netmask = self.get_first_usable_ip_and_netmask(vpc_outputs.get(untrust_cidr_key, ''))
@@ -91,7 +92,7 @@ class FetchState:
             # Fetch VPC subnet data to get next-hop information and netmasks
             vpc_subnet_data = self.process_vpc_subnet_data(region)
 
-            ec2_counter = 1  # Reset counter for each region
+            # ec2_counter = 1  # Reset counter for each region
             ec2_stack_name = f"{self.config['aws']['StackNameEC2']}"
             ec2_outputs = self.fetch_stack_outputs(region, ec2_stack_name)
 
@@ -100,26 +101,27 @@ class FetchState:
                 trust_nexthop = az_data['trust_nexthop']
                 untrust_netmask = az_data['untrust_netmask']
                 trust_netmask = az_data['trust_netmask']
-                gp_counter = 1
+                az_suffix = az.split(region)[-1].replace('-', '')
 
                 for instance_num in range(1, self.config['aws']['Regions'][region]['availability_zones'][az]['min_ec2_count'] + 1):
-                    public_untrust_ip = ec2_outputs.get(f'PublicEIP{ec2_counter}')
-                    untrust_ip_base, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{ec2_counter}'))
-                    mgmt_ip, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'MgmtInterface{ec2_counter}'))
-                    trust_ip_base, secondary_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{ec2_counter}'))
+                    ec2_count_name = f'{instance_num}{az_suffix}'
+                    public_untrust_ip = ec2_outputs.get(f'PublicEIP{ec2_count_name}')
+                    logging.info(f'instance: {ec2_count_name} public_untrust: {public_untrust_ip}')
+                    untrust_ip_base, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PublicInterface{ec2_count_name}'))
+                    mgmt_ip, _ = self.fetch_eni_private_ip(region, ec2_outputs.get(f'MgmtInterface{ec2_count_name}'))
+                    trust_ip_base, secondary_ip = self.fetch_eni_private_ip(region, ec2_outputs.get(f'PrivateInterface{ec2_count_name}'))
 
-                    # Incorporate netmask information directly
                     untrust_ip = f"{untrust_ip_base}/{untrust_netmask}" if untrust_ip_base else None
                     untrust_ip_single = f"{untrust_ip_base}" if untrust_ip_base else None
                     trust_ip = f"{trust_ip_base}/{trust_netmask}" if trust_ip_base else None
                     trust_ip_single = f"{trust_ip_base}" if trust_ip_base else None
 
-                    # Dynamically fetch the user pool based on EC2 counter
-                    gp_pool_key = f'user_pool{gp_counter}'
+                    gp_pool_key = f'user_pool{instance_num}'
                     gp_pool = self.config['aws']['Regions'][region]['availability_zones'][az]['globalprotect'].get(gp_pool_key, 'N/A')
-                    gp_counter += 1
 
-                    state[f'{region}_{az}_instance_{ec2_counter}'] = {
+                    # Use a more descriptive key to ensure uniqueness
+                    state_key = f'{az}_instance_{instance_num}'
+                    state[state_key] = {
                         'public_untrust_ip': public_untrust_ip,
                         'untrust_ip': untrust_ip,
                         'untrust_ip_base': untrust_ip_single,
@@ -130,9 +132,8 @@ class FetchState:
                         'trust_secondary_ip': secondary_ip,
                         'trust_nexthop': trust_nexthop,
                         'mgmt_ip': mgmt_ip,
-                        'gp_pool': gp_pool,
+                        'vpn_user_pool': gp_pool,
                     }
-                    ec2_counter += 1
 
         return state
 

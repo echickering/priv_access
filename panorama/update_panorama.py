@@ -301,7 +301,7 @@ class UpdatePanorama:
         self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
         self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
         self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
-        self.update_variable(serial, '$gp_pool', details['gp_pool'], logger)
+        self.update_variable(serial, '$vpn_user_pool', details['vpn_user_pool'], logger)
         logger.info(f"Updated variables for device with serial {serial}.")
 
     def update_variable(self, serial, variable_name, value, logger):
@@ -332,7 +332,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=2):
+    def commit_dg_tpl_stack(self, logger, delay=240):
         cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
         payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay} seconds for devices to stablize during onboarding')
@@ -402,7 +402,7 @@ class UpdatePanorama:
         # Committing changes to Panorama
         job_id = self.commit_panorama(logger)
         if job_id and self.check_commit_status(job_id, logger):
-            logger.info("Proceeding with commit-all to template stack.")
+            logger.info("Proceeding with commit-all to DG and template stack.")
             commit_all_job_id = self.commit_dg_tpl_stack(logger)
             if commit_all_job_id:
                 self.check_commit_status(commit_all_job_id, logger)

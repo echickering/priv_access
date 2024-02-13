@@ -137,26 +137,37 @@ class EC2Deployer:
         ]
 
         # Initialize counters
-        ec2_counter = 1  # Counts total EC2 instances across all AZs
-        az_counter = 1   # Counts AZs to reference the correct subnet IDs
+        # ec2_counter = 1  # Counts total EC2 instances across all AZs
+        # az_counter = 1   # Counts AZs to reference the correct subnet IDs
 
         # Iterate through each AZ
         for az, az_config in region_config['availability_zones'].items():
+            ec2_counter = 1  # Counts total EC2 instances across all AZs
+            
             min_ec2_count = az_config.get('min_ec2_count', 1)
             
             # Iterate through each instance in the AZ
             for _ in range(min_ec2_count):
+                logging.debug(f'Region: {region}')
+                logging.debug(f'AZ: {az}')
+                az_suffix = az.split(region)[-1].replace('-', '')
+                logging.debug(f'AZ Suffix: {az_suffix} for AZ: {az}')
+                logging.debug(f'EC2 Count: {ec2_counter} for AZ: {az}')
+                ec2_count_name = f'{ec2_counter}{az_suffix}'
+                logging.debug(f'Full EC2 Count and Suffix: {ec2_count_name}')
+                logging.debug(f"InstanceName:{self.config['aws']['NamePrefix']}{ec2_count_name}")
                 parameters += [
-                    {'ParameterKey': f'UnTrustID{ec2_counter}', 'ParameterValue': vpc_stack_outputs.get(f'UnTrustID{az_counter}', '')},
-                    {'ParameterKey': f'TrustID{ec2_counter}', 'ParameterValue': vpc_stack_outputs.get(f'TrustID{az_counter}', '')},
-                    {'ParameterKey': f'InstanceName{ec2_counter}', 'ParameterValue': f"{self.config['aws']['NamePrefix']}{region}-VM{ec2_counter}"},
-                    {'ParameterKey': f'NetworkBorderGroupValue{ec2_counter}', 'ParameterValue': az_config['NetworkBorderGroup']},
-                    {'ParameterKey': f'InstanceType{ec2_counter}', 'ParameterValue': az_config['instance_type']}
+                    {'ParameterKey': f'UnTrustID{ec2_count_name}', 'ParameterValue': vpc_stack_outputs.get(f'UnTrustIDAZ{az_suffix}', '')},
+                    {'ParameterKey': f'TrustID{ec2_count_name}', 'ParameterValue': vpc_stack_outputs.get(f'TrustIDAZ{az_suffix}', '')},
+                    {'ParameterKey': f'InstanceName{ec2_count_name}', 'ParameterValue': f"{self.config['aws']['NamePrefix']}{az_suffix}-VM{ec2_counter}"},
+                    {'ParameterKey': f'NetworkBorderGroupValue{ec2_count_name}', 'ParameterValue': az_config['NetworkBorderGroup']},
+                    {'ParameterKey': f'InstanceType{ec2_count_name}', 'ParameterValue': az_config['instance_type']}
                 ]
                 ec2_counter += 1  # Increment for the next EC2 instance
             
-            az_counter += 1  # Increment after processing all instances in the AZ
+            # az_counter += 1  # Increment after processing all instances in the AZ
 
+        logging.debug(f'Parameters: {parameters}')
         return parameters
 
     def deploy(self):
