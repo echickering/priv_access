@@ -6,38 +6,84 @@ aws:
     AdditionalTag: "Value"
   #Update StackName to what you'd like as this is the CFT that deploys the VPC
   StackName: "PrivateAccess"
-  #Update NamePrefix as all items will have this as its prefix for naming convention
-  NamePrefix: "PPA-"
+  hosted_zone_id: "Z060987032UDOJ7WQIY6A" #AWS Route53 Hosted Zone ID #
+  domain: "mydomain.com" #AWS Domain associated to the Hosted Zone
+  NamePrefix: "My-GP-" #NamePrefix for AWS Tag Name prefix. Alphanumeric and "-" only, must end with "-"
   Regions:
+    us-east-1:
+      vpc_cidr: "10.22.240.0/23"
+      key_name: "us-east1"
+      ngfw_ami_id: "ami-0bda05a4d1a0eaf08"
+      availability_zones:
+          us-east-1-chi-2a: #the first AZ should be an AZ, not a local zone, if you are attaching TGW to the first subnet
+            az_name: us-east-1-chi-2a #its just easier to do this
+            NetworkBorderGroup: us-east-1-chi-2 #just enter the region/local zone
+            instance_type: "m6i.xlarge"
+            min_ec2_count: 1
+            max_ec2_count: 3
+            untrust_subnet_cidr: "10.22.240.0/28" #Untrust subnet
+            trust_subnet_cidr: "10.22.240.16/28" #Trust subnet
+            globalprotect:
+              user_pool1: "10.0.0.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool2: "10.0.2.0/23"
+              user_pool3: "10.0.4.0/23"
+              bgp_as1: "64600"
+              bgp_as2: "64600"
+              bgp_as3: "64600"
+          us-east-1-dfw-2a:
+            az_name: us-east-1-dfw-2a #its just easier to do this
+            NetworkBorderGroup: us-east-1-dfw-2 #just enter the region/local zone
+            instance_type: "m6i.xlarge"
+            min_ec2_count: 1
+            max_ec2_count: 3
+            untrust_subnet_cidr: "10.22.240.32/28" #Untrust subnet
+            trust_subnet_cidr: "10.22.240.48/28" #Trust subnet
+            globalprotect:
+              user_pool1: "10.0.6.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool2: "10.0.8.0/23"
+              user_pool3: "10.0.10.0/23"
+              bgp_as1: "64601"
+              bgp_as2: "64601"
+              bgp_as3: "64601"
     us-east-2:
-      #update accordingly
-      vpc_cidr: "10.18.240.0/23"
-      subnet1_cidr_block: "10.18.240.0/26"
-      subnet2_cidr_block: "10.18.240.64/26"
-      ngfw_ami_id: "ami-074413e137fc5826c"
+      vpc_cidr: "10.23.240.0/23"
       key_name: "us-east2"
-    us-west-1:
-      #update accordingly
-      vpc_cidr: "10.20.242.0/23"
-      subnet1_cidr_block: "10.20.242.0/26"
-      subnet2_cidr_block: "10.20.242.64/26"
-      ngfw_ami_id: "ami-01b6650ae9be2b4f9"
-      key_name: "us-west1"
-    # Add more regions as needed
+      ngfw_ami_id: "ami-05c242756184e8330"
+      availability_zones:
+          us-east-2a:
+            az_name: us-east-2a
+            NetworkBorderGroup: us-east-2
+            instance_type: "m6i.xlarge"
+            min_ec2_count: 2
+            max_ec2_count: 3
+            untrust_subnet_cidr: "10.23.240.0/28" #Unrust subnet
+            trust_subnet_cidr: "10.23.240.16/28" #Trust subnet
+            tgw_id: tgw-0fd363e13bdb37843
+            tgw_cidr: "10.1.120.0/24"
+            globalprotect:
+              user_pool1: "10.0.12.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool2: "10.0.14.0/23"
+              user_pool3: "10.0.16.0/23"
+              bgp_as1: "64602"
+              bgp_as2: "64602"
+              bgp_as3: "64602"
+        # Add more regions as needed
+  
   EC2:
-    instance_type: "m5.xlarge"
-    # Do not update items within {} as the ec2 script will pull from palo_alto:panorama
     user_data: |
       type=dhcp-client
       hostname={NamePrefix}
-      auth-key={panorama_api_key}
+      auth-key={panorama_auth_key}
       panorama-server={panorama_ip_address1}
       panorama-server-2={panorama_ip_address2}
-      tplname={PanoramaTemplate}
+      tplname={PanoramaTemplateStack}
       dgname={PanoramaDeviceGroup}
       plugin-op-commands=panorama-licensing-mode-on
       op-command-modes=jumbo-frame,mgmt-interface-swap
       op-cmd-dpdk-pkt-io=on
+      vm-series-auto-registration-pin-id=962e14cc-4305-4618-a63a-c33d3346c467
+      vm-series-auto-registration-pin-value=312cd70318354d1e8d4472e96f16546a
+
 
 palo_alto:
   panorama:
@@ -47,11 +93,31 @@ palo_alto:
     api_key: your-panorama-sw-fw-license-key
     PanoramaTemplate: PPA-TPL-Stack
     PanoramaDeviceGroup: PPA-DG
+    VirtualRouter: "PPA-Trust-VR"
+    UserZoneName: "VPN-Users"
+    BranchZone: "Branch"
 
 vpn:
+  crypto_settings:
+    ike_crypto: 
+      name: "IKE_Crypto"
+      auth: "sha512"
+      dh_group: "group19"
+      encryption: "aes-256-cbc"
+    ipsec_crypto: 
+      name: "IPSEC_Crypto"
+      auth: "none"
+      dh_group: "group19"
+      encryption: "aes-256-gcm"
+    ike_gw: 
+      psk: "Gaius4132$"      
   mesh_vpn_settings:
     # Settings for full mesh VPN configuration
+  on_prem_vpn_settings:
+    site1: "108.44.161.18"
+    site2: "108.44.161.20"
 
-ibgp:
+ebgp:
   routing_settings:
-    # Settings for iBGP configuration
+    PrivateAsRange: 64600-64630
+    LoopBackCidr: 
