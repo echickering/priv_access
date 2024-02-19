@@ -24,7 +24,7 @@ aws:
             untrust_subnet_cidr: "10.22.240.0/28" #Untrust subnet
             trust_subnet_cidr: "10.22.240.16/28" #Trust subnet
             globalprotect:
-              user_pool1: "10.0.0.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool1: "10.0.0.0/23" #unique user pool for instance, list same number as max_ec2_count
               user_pool2: "10.0.2.0/23"
               user_pool3: "10.0.4.0/23"
               bgp_as1: "64600"
@@ -39,7 +39,7 @@ aws:
             untrust_subnet_cidr: "10.22.240.32/28" #Untrust subnet
             trust_subnet_cidr: "10.22.240.48/28" #Trust subnet
             globalprotect:
-              user_pool1: "10.0.6.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool1: "10.0.6.0/23" #unique user pool for instance, list same number as max_ec2_count
               user_pool2: "10.0.8.0/23"
               user_pool3: "10.0.10.0/23"
               bgp_as1: "64601"
@@ -61,7 +61,7 @@ aws:
             tgw_id: tgw-0fd363e13bdb37843
             tgw_cidr: "10.1.120.0/24"
             globalprotect:
-              user_pool1: "10.0.12.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
+              user_pool1: "10.0.12.0/23" #unique user pool for instance, list same number as max_ec2_count
               user_pool2: "10.0.14.0/23"
               user_pool3: "10.0.16.0/23"
               bgp_as1: "64602"
