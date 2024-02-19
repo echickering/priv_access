@@ -5,10 +5,12 @@ from logging.handlers import TimedRotatingFileHandler
 from aws.aws_creds import AWSUtil
 from api.palo_token import PaloToken
 from panorama.update_panorama2 import UpdatePanorama
-from aws.deploy_vpc2 import VPCDeployer
-from aws.deploy_ec22 import EC2Deployer
-from aws.fetch_state2 import FetchState
-from aws.update_ec2_template2 import UpdateEc2Template
+from aws.update_vpc_template import UpdateVpcTemplate
+from aws.update_ec2_template import UpdateEc2Template
+from aws.deploy_vpc import VPCDeployer
+from aws.deploy_ec2 import EC2Deployer
+from aws.fetch_state import FetchState
+from aws.route53_updater import Route53Updater
 from aws.dynamodb_manager import DynamoDBManager
 
 
@@ -37,12 +39,24 @@ def setup_logging():
 def main():
     setup_logging()  # Call the setup_logging function
 
-    # Initialize DynamoDBManager with AWS credentials - Step 2
+    # Initialize aws credentials
     aws_credentials = AWSUtil.load_aws_credentials()
-    dynamodb_manager = DynamoDBManager(aws_credentials=aws_credentials, table_name="MobileUserPool")
+
+    # Load PAN credentials
+    palo_token = PaloToken()
+    token = palo_token.retrieve_token()
+    base_url = palo_token.ngfw_url
+
+    # Initialize DynamoDBManager 
+    # dynamodb_manager = DynamoDBManager(aws_credentials=aws_credentials, table_name="MobileUserPool")
 
     # Create a DynamoDB table if it doesn't exist
-    dynamodb_manager.create_table_if_not_exists()
+    # dynamodb_manager.create_table_if_not_exists()
+
+    # Update VPC CloudFormation template based on region and availability zones / local zones chosen
+    vpc_template_updater = UpdateVpcTemplate('./config/config.yml', './config/vpc_template.yml')
+    vpc_template_updater.update_templates()
+    logging.info("VPC region template updated based on availability zones from config.yml....")
 
     # Create an instance of VPCDeployer
     deployer_vpc = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
@@ -72,11 +86,6 @@ def main():
             logging.info(f"  {key}: {value}")
         logging.info("")  # Add a newline for better readability
 
-    # Load PAN credentials
-    palo_token = PaloToken()
-    token = palo_token.retrieve_token()
-    base_url = palo_token.ngfw_url
-
     # Load the configuration from config.yml
     with open('./config/config.yml', 'r') as file:
         config = yaml.safe_load(file)
@@ -86,11 +95,18 @@ def main():
     tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplateStack']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
     
-    # Create an instance of UpdatePanorama
+    # # Create an instance of UpdatePanorama
     updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, token, base_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
+
+    # # Initialize Route53Updater
+    hosted_zone_id = config['aws']['hosted_zone_id']  # Correct key for hosted zone ID
+    domain = config['aws']['domain']  # Ensure this key exists and is set to "securesaccess.com" or your desired domain
+
+    route53_updater = Route53Updater(aws_credentials, hosted_zone_id, domain)
+    route53_updater.update_dns_records(state_data)
 
 if __name__ == '__main__':
     main()

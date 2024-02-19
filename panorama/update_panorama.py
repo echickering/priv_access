@@ -332,7 +332,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=240):
+    def commit_dg_tpl_stack(self, logger, delay=300):
         cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
         payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay} seconds for devices to stablize during onboarding')
