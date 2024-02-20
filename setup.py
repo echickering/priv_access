@@ -11,6 +11,9 @@ class CustomInstallCommand(install):
             'config/aws_credentials.example.yml',
             'config/config.example.yml',
             'config/onprem_config.example.yml',
+            'config/ec2_template.example.yml',
+            'config/vpc_template.example.yml',
+            'config/pan_credentials.example.yml',
         ]
         for file in config_files:
             if os.path.exists(file):

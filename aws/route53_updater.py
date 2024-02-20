@@ -9,16 +9,16 @@ class Route53Updater:
     REGION_GEO_IDENTIFIER_MAPPING = {
         'us-gov-east-1': 'us-goveast',
         'us-gov-west-1': 'us-govwest',
-        'us-west-1': 'us-nocal',
+        'us-west-1': 'us-northcalifornia',
         'us-west-2': 'us-oregon',
         'us-west-2-den-1a': 'us-denver',
         'us-west-2-las-1a': 'us-vegas',
-        'us-west-2-lax-1a': 'us-lax',
-        'us-west-2-lax-1b': 'us-lax',
+        'us-west-2-lax-1a': 'us-losangelesa',
+        'us-west-2-lax-1b': 'us-losangelesb',
         'us-west-2-phx-2a': 'us-phoenix',
         'us-west-2-pdx-1a': 'us-portland',
         'us-west-2-sea-1a': 'us-seattle',
-        'us-east-1': 'us-va',
+        'us-east-1': 'us-virginia',
         'us-east-1-chi-2a': 'us-chicago',
         'us-east-1-dfw-2a': 'us-dallas',
         'us-east-1-atl-1a': 'us-atlanta',
@@ -56,7 +56,7 @@ class Route53Updater:
         'ca-central-1': 'ca-central',
         'ca-west-1': 'ca-calgary',
         'eu-central-1': 'eu-frankfurt',
-        'eu-central-1-ham-1a': 'eu-hamburg',
+        'eu-central-1-ham-1a': 'eu-hamsburg',
         'eu-central-1-waw-1a': 'eu-warsaw',
         'eu-central-2': 'eu-zurich',
         'eu-west-1': 'eu-ireland',
@@ -76,7 +76,7 @@ class Route53Updater:
         # Add more mappings as needed
     }
 
-    def __init__(self, aws_credentials, hosted_zone_id, domain):
+    def __init__(self, aws_credentials, hosted_zone_id, domain, portal_domain):
         self.route53_client = boto3.client(
             'route53',
             aws_access_key_id=aws_credentials['access_key_id'],
@@ -84,6 +84,7 @@ class Route53Updater:
         )
         self.hosted_zone_id = hosted_zone_id
         self.domain = domain
+        self.portal_domain = portal_domain
 
     def region_to_geoidentifier(self, region_az):
         # Try direct matching first
@@ -117,12 +118,34 @@ class Route53Updater:
         current_records = self.fetch_current_records()
         desired_records = self.prepare_desired_records(state_data)
 
-        # First, delete records not present in the desired state
         self.remove_unmatched_records(current_records, desired_records)
 
-        # Then, upsert records based on the desired state
+        # Fetch and delete previous portal domain records before upserting new ones
+        portal_domain_records = self.fetch_portal_domain_records()
+        self.delete_previous_portal_domain_records(portal_domain_records)
+
+        portal_ips = []  # Aggregate IPs for the portal domain
         for geo_dns_name, ips in desired_records.items():
             self.upsert_weighted_a_records(geo_dns_name, ips)
+            portal_ips.extend(ips)  # Collect IPs for each region
+
+        # Now handle the portal domain separately
+        self.upsert_portal_domain_records(portal_ips)
+
+    def fetch_portal_domain_records(self):
+        """Fetch all current weighted A records for self.portal_domain."""
+        portal_domain_records = {}
+        paginator = self.route53_client.get_paginator('list_resource_record_sets')
+        for page in paginator.paginate(HostedZoneId=self.hosted_zone_id):
+            for record_set in page['ResourceRecordSets']:
+                if record_set['Type'] == 'A' and record_set['Name'] == f"{self.portal_domain}.":
+                    portal_domain_records[record_set['Name']] = record_set
+        return portal_domain_records
+
+    def delete_previous_portal_domain_records(self, portal_domain_records):
+        """Delete all fetched weighted A records for self.portal_domain."""
+        for record_name, record_data in portal_domain_records.items():
+            self.delete_record(record_name, record_data)
 
     def prepare_geo_dns_mapping(self, state_data):
         geo_dns_mapping = {}
@@ -203,6 +226,12 @@ class Route53Updater:
         for i, ip in enumerate(ips):
             unique_set_identifier = f"{geo_dns_name}-{i+1}"
             self.upsert_a_record(f"{geo_dns_name}.", ip, 100 // len(ips), unique_set_identifier)
+
+    def upsert_portal_domain_records(self, ips):
+        """Upsert weighted A records for the portal domain."""
+        for i, ip in enumerate(ips):
+            unique_set_identifier = f"{self.portal_domain}-{i+1}"
+            self.upsert_a_record(self.portal_domain, ip, 100, unique_set_identifier)
 
     def upsert_a_record(self, name, value, weight, set_identifier):
         try:
