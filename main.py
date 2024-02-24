@@ -6,10 +6,10 @@ from aws.aws_creds import AWSUtil
 from api.palo_token import PaloToken
 from panorama.update_panorama2 import UpdatePanorama
 from aws.update_vpc_template import UpdateVpcTemplate
-from aws.update_ec2_template import UpdateEc2Template
-from aws.deploy_vpc import VPCDeployer
-from aws.deploy_ec2 import EC2Deployer
-from aws.fetch_state import FetchState
+from aws.update_ec2_template2 import UpdateEc2Template
+from aws.deploy_vpc2 import VPCDeployer
+from aws.deploy_ec22 import EC2Deployer
+from aws.fetch_state2 import FetchState
 from aws.route53_updater import Route53Updater
 from aws.dynamodb_manager import DynamoDBManager
 
@@ -94,9 +94,10 @@ def main():
     template_name = config['palo_alto']['panorama']['PanoramaTemplate']
     tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplateStack']
     dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
+    license_manager = config['palo_alto']['panorama']['LicenseManager'] #license manager name used for sw_fw_license plugin in panorama
     
-    # # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, token, base_url, state_data)
+    # Create an instance of UpdatePanorama
+    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, token, base_url, state_data, license_manager)
 
     # Call the update_panorama method
     updater.update_panorama()
@@ -104,8 +105,9 @@ def main():
     # # Initialize Route53Updater
     hosted_zone_id = config['aws']['hosted_zone_id']  # Correct key for hosted zone ID
     domain = config['aws']['domain']  # Ensure this key exists and is set to "securesaccess.com" or your desired domain
+    portal_domain = config['aws']['portal_fqdn'] #This is your portal address - example "portal.securesaccess.com"
 
-    route53_updater = Route53Updater(aws_credentials, hosted_zone_id, domain)
+    route53_updater = Route53Updater(aws_credentials, hosted_zone_id, domain, portal_domain)
     route53_updater.update_dns_records(state_data)
 
 if __name__ == '__main__':

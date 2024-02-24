@@ -2,7 +2,7 @@ import yaml
 
 class AWSUtil:
     @staticmethod
-    def load_aws_credentials(credentials_path='./config/aws_credentials.yml'):
+    def load_aws_credentials(credentials_path):
         """
         Load AWS credentials from a specified YAML file.
 

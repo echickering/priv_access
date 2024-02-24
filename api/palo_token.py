@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from requests.exceptions import SSLError
 
 class PaloToken:
-    def __init__(self, config_path='./config/pan_credentials.yml'):
+    def __init__(self, config_path):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self.config_path = os.path.expanduser(config_path)
         self.load_config()
