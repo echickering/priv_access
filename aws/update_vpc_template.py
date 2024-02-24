@@ -33,14 +33,10 @@ setup_yaml()
 
 
 class UpdateVpcTemplate:
-    def __init__(self, config_path, base_template_path, output_dir='./config'):
-        self.config = self.load_yaml_file(config_path)
-        self.base_template = self.load_yaml_file(base_template_path)
+    def __init__(self, config, base_template, output_dir='./config'):
+        self.config = config
+        self.base_template = base_template
         self.output_dir = output_dir
-
-    def load_yaml_file(self, file_path):
-        with open(file_path, 'r') as file:
-            return yaml.load(file, Loader=yaml.SafeLoader)
 
     def write_yaml_file(self, data, file_path):
         with open(file_path, 'w') as file:
@@ -113,10 +109,3 @@ class UpdateVpcTemplate:
             region_template['Description'] += f" for {region}"
             region_output_path = os.path.join(self.output_dir, f"{region}_vpc_template.yml")
             self.write_yaml_file(region_template, region_output_path)
-
-if __name__ == "__main__":
-    config_path = './config/config.yml'
-    base_template_path = './config/vpc_template.yml'
-    updater = UpdateVpcTemplate(config_path, base_template_path)
-    updater.update_templates()
-    print("Updated templates are saved.")

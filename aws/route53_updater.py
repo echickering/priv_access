@@ -76,15 +76,16 @@ class Route53Updater:
         # Add more mappings as needed
     }
 
-    def __init__(self, aws_credentials, hosted_zone_id, domain, portal_domain):
+    def __init__(self, aws_credentials, config):
         self.route53_client = boto3.client(
             'route53',
             aws_access_key_id=aws_credentials['access_key_id'],
             aws_secret_access_key=aws_credentials['secret_access_key']
         )
-        self.hosted_zone_id = hosted_zone_id
-        self.domain = domain
-        self.portal_domain = portal_domain
+        self.config = config
+        self.hosted_zone_id = self.config['aws']['hosted_zone_id']
+        self.domain = self.config['aws']['domain']
+        self.portal_domain = self.config['aws']['portal_fqdn']
 
     def region_to_geoidentifier(self, region_az):
         # Try direct matching first
@@ -99,10 +100,6 @@ class Route53Updater:
 
         # Fallback
         return 'unknown'
-    
-    def get_managed_geoidentifiers(self):
-        # Return a view of all managed geographic identifiers from the class-level mapping
-        return set(self.REGION_GEO_IDENTIFIER_MAPPING.values())
 
     def fetch_current_records(self):
         current_records = {}
@@ -110,19 +107,20 @@ class Route53Updater:
         for page in paginator.paginate(HostedZoneId=self.hosted_zone_id):
             for record_set in page['ResourceRecordSets']:
                 if record_set['Type'] == 'A' and record_set['Name'].endswith(self.domain + '.'):
-                    current_records[record_set['Name']] = record_set
-        logging.debug(current_records)
+                    # Construct a unique key for each record set variation
+                    record_key = record_set['Name']
+                    if 'SetIdentifier' in record_set:
+                        record_key += record_set['SetIdentifier']
+                    current_records[record_key] = record_set
+        logging.info(current_records)
         return current_records
 
     def update_dns_records(self, state_data):
         current_records = self.fetch_current_records()
         desired_records = self.prepare_desired_records(state_data)
-
-        self.remove_unmatched_records(current_records, desired_records)
-
-        # Fetch and delete previous portal domain records before upserting new ones
-        portal_domain_records = self.fetch_portal_domain_records()
-        self.delete_previous_portal_domain_records(portal_domain_records)
+        
+        # Identify and remove records not matching the desired state
+        self.remove_orphaned_records(current_records, desired_records)
 
         portal_ips = []  # Aggregate IPs for the portal domain
         for geo_dns_name, ips in desired_records.items():
@@ -132,20 +130,50 @@ class Route53Updater:
         # Now handle the portal domain separately
         self.upsert_portal_domain_records(portal_ips)
 
-    def fetch_portal_domain_records(self):
-        """Fetch all current weighted A records for self.portal_domain."""
-        portal_domain_records = {}
-        paginator = self.route53_client.get_paginator('list_resource_record_sets')
-        for page in paginator.paginate(HostedZoneId=self.hosted_zone_id):
-            for record_set in page['ResourceRecordSets']:
-                if record_set['Type'] == 'A' and record_set['Name'] == f"{self.portal_domain}.":
-                    portal_domain_records[record_set['Name']] = record_set
-        return portal_domain_records
+    def remove_orphaned_records(self, current_records, desired_records):
+        """
+        Remove DNS records that are no longer needed or represent decommissioned regions,
+        while preserving records unrelated to the portal domain or geographic identifiers.
+        """
+        # Collect all DNS names that are actively managed by this script based on REGION_GEO_IDENTIFIER_MAPPING.
+        managed_dns_names = {f"{geo_id}.{self.domain}." for geo_id in self.REGION_GEO_IDENTIFIER_MAPPING.values()}
 
-    def delete_previous_portal_domain_records(self, portal_domain_records):
-        """Delete all fetched weighted A records for self.portal_domain."""
-        for record_name, record_data in portal_domain_records.items():
-            self.delete_record(record_name, record_data)
+        # Include portal domain records in managed DNS names.
+        managed_dns_names.add(f"{self.portal_domain}.")
+
+        # Iterate over current records to identify orphaned records.
+        for current_record_key, record_data in current_records.items():
+            # Check if the record is a managed DNS name or a portal domain record.
+            is_managed_record = any(current_record_key.startswith(managed_name) for managed_name in managed_dns_names)
+            
+            # Extract record's base name (excluding set identifier) for comparison.
+            record_base_name = current_record_key.rsplit('.', 2)[0] + '.'
+
+            # Determine if the record is orphaned.
+            is_orphaned_record = is_managed_record and record_base_name not in desired_records
+
+            if is_orphaned_record:
+                logging.info(f"Found orphaned record: {current_record_key}, scheduling for deletion.")
+                self.delete_record(current_record_key, record_data)
+
+    def delete_record(self, record_key, record_data):
+        """
+        Delete a specific DNS record from Route 53.
+        """
+        try:
+            change_batch = {
+                'Changes': [{
+                    'Action': 'DELETE',
+                    'ResourceRecordSet': record_data
+                }]
+            }
+            self.route53_client.change_resource_record_sets(
+                HostedZoneId=self.hosted_zone_id,
+                ChangeBatch=change_batch
+            )
+            logging.info(f"Successfully deleted record: {record_key}")
+        except Exception as e:
+            logging.error(f"Error deleting record {record_key}: {e}")
 
     def prepare_geo_dns_mapping(self, state_data):
         geo_dns_mapping = {}
@@ -172,16 +200,6 @@ class Route53Updater:
                 logging.error(f"Invalid IPv4 address: {ip}")
         return desired_records
 
-    def remove_unmatched_records(self, current_records, desired_records):
-        managed_identifiers = self.get_managed_geoidentifiers()
-
-        for record_name, record_data in current_records.items():
-            # Check if record should be managed by the script
-            if any(record_name.startswith(f"{identifier}.{self.domain}") for identifier in managed_identifiers):
-                # Check if the record is not part of the desired state to decide on its deletion
-                if record_name not in desired_records:
-                    self.delete_record(record_name, record_data)
-
     def get_managed_identifiers(self):
         """Generate a set of all identifiers that are managed by the script, based on region_to_geoidentifier mappings."""
         managed_identifiers = set()
@@ -190,36 +208,6 @@ class Route53Updater:
             if identifier != 'unknown':  # Exclude 'unknown' to avoid false positives
                 managed_identifiers.add(identifier)
         return managed_identifiers
-
-    def delete_record(self, record_name, record_data):
-        # Ensure matching format with Route 53 records
-        if record_name in record_data['Name']:
-            changes = {
-                'Changes': [{
-                    'Action': 'DELETE',
-                    'ResourceRecordSet': {
-                        'Name': record_data['Name'],
-                        'Type': record_data['Type'],
-                        'TTL': record_data['TTL'],
-                        'ResourceRecords': record_data['ResourceRecords']
-                    }
-                }]
-            }
-
-            # Check if 'Weight' and 'SetIdentifier' exist for weighted records.
-            if 'Weight' in record_data and 'SetIdentifier' in record_data:
-                changes['Changes'][0]['ResourceRecordSet']['Weight'] = record_data['Weight']
-                changes['Changes'][0]['ResourceRecordSet']['SetIdentifier'] = record_data['SetIdentifier']
-
-            # Debug: Log the change batch being submitted for deletion
-            logging.debug(f"Submitting deletion for: {changes}")
-
-            try:
-                self.route53_client.change_resource_record_sets(
-                    HostedZoneId=self.hosted_zone_id, ChangeBatch=changes)
-                logging.debug(f"Deleted record: {record_name}")
-            except Exception as e:
-                logging.error(f"Failed to delete record {record_name}: {e}")
 
     def upsert_weighted_a_records(self, geo_dns_name, ips):
         """Upsert weighted A records."""

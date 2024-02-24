@@ -7,18 +7,11 @@ import os
 import threading
 
 class EC2Deployer:
-    def __init__(self, config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml', output_dir='./config'):
-        self.config = self.load_config(config_path)
-        self.aws_credentials = self.load_aws_credentials(aws_credentials_path)
+    def __init__(self, config, aws_credentials, output_dir='./config'):
+        self.config = config
+        self.aws_credentials = aws_credentials
+        self.name_prefix = self.config['aws']['NamePrefix']
         self.output_dir = output_dir
-
-    def load_config(self, file_path):
-        with open(file_path, 'r') as file:
-            return yaml.safe_load(file)
-
-    def load_aws_credentials(self, file_path):
-        with open(file_path, 'r') as file:
-            return yaml.safe_load(file)['aws_credentials']
 
     def deploy_stack_thread(self, region):
         """Thread target for deploying a stack."""
@@ -50,7 +43,7 @@ class EC2Deployer:
         
         # Dynamic values to replace in the user_data template
         replacements = {
-            '{NamePrefix}': self.config['aws']['NamePrefix'] + az,
+            '{NamePrefix}': self.name_prefix + az,
             '{panorama_auth_key}': self.config['palo_alto']['panorama']['auth_key'],
             '{panorama_ip_address1}': self.config['palo_alto']['panorama']['ip_address1'],
             '{panorama_ip_address2}': self.config['palo_alto']['panorama']['ip_address2'],
@@ -221,11 +214,11 @@ class EC2Deployer:
                 logging.debug(f'EC2 Count: {ec2_counter} for AZ: {az}')
                 ec2_count_name = f'{ec2_counter}{az_suffix}'
                 logging.debug(f'Full EC2 Count and Suffix: {ec2_count_name}')
-                logging.debug(f"InstanceName:{self.config['aws']['NamePrefix']}{ec2_count_name}")
+                logging.debug(f"InstanceName:{self.name_prefix}{ec2_count_name}")
                 parameters += [
                     {'ParameterKey': f'UnTrustID{ec2_count_name}', 'ParameterValue': vpc_stack_outputs.get(f'UnTrustIDAZ{az_suffix}', '')},
                     {'ParameterKey': f'TrustID{ec2_count_name}', 'ParameterValue': vpc_stack_outputs.get(f'TrustIDAZ{az_suffix}', '')},
-                    {'ParameterKey': f'InstanceName{ec2_count_name}', 'ParameterValue': f"{self.config['aws']['NamePrefix']}{az_suffix}-VM{ec2_counter}"},
+                    {'ParameterKey': f'InstanceName{ec2_count_name}', 'ParameterValue': f"{self.name_prefix}{az_suffix}-VM{ec2_counter}"},
                     {'ParameterKey': f'NetworkBorderGroupValue{ec2_count_name}', 'ParameterValue': az_config['NetworkBorderGroup']},
                     {'ParameterKey': f'InstanceType{ec2_count_name}', 'ParameterValue': az_config['instance_type']}
                 ]
@@ -243,8 +236,3 @@ class EC2Deployer:
         for thread in threads:
             thread.join()
         logging.info("All deployments completed.")
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    ec2_deployer = EC2Deployer(config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml', template_path='./config/ec2_template.yml')
-    ec2_deployer.deploy()

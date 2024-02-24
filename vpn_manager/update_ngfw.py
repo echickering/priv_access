@@ -7,12 +7,12 @@ import time
 import json
 
 class UpdateNGFW:
-    def __init__(self, config, template, token, base_url, state_data):
+    def __init__(self, config, token, base_url, state_data):
         self.config = config
         self.token = token
         self.base_url = base_url
-        self.template = template
         self.state_data = state_data
+        self.template = self.config['palo_alto']['panorama']['PanoramaTemplate']
 
     def set_ipsec_crypto_profile(self, logger):
         # Set all variables to template based on the first instance, eventually each device will be overwritten.

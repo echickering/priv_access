@@ -7,7 +7,7 @@ class VPCDeployer:
     def __init__(self, config, aws_credentials):
         self.config = config
         self.aws_credentials = aws_credentials
-        self.name_prefix = None  # Initialize name_prefix to None
+        self.name_prefix = self.config['aws']['NamePrefix']
 
     def load_config(self, file_path):
         with open(file_path, 'r') as file:
@@ -50,17 +50,6 @@ class VPCDeployer:
         waiter.wait(StackName=stack_name)
 
         return {"Status": action, "StackId": response['StackId']}
-
-    def load_config_and_deploy(self, config_file_path, aws_credentials_file_path):
-        self.config = self.load_config(config_file_path)  # Set the config attribute
-        aws_creds = self.load_config(aws_credentials_file_path)
-        self.aws_credentials = aws_creds['aws_credentials']
-        self.name_prefix = self.config['aws']['NamePrefix']  # Initialize name_prefix here
-
-        logging.debug(f"Debug of load_config: config={self.config}, name_prefix={self.name_prefix}")
-
-        # Call the main method directly instead of creating a new instance
-        self.main()
 
     def main(self):
         for region, region_config in self.config['aws']['Regions'].items():
@@ -122,7 +111,8 @@ class VPCDeployer:
             else:
                 logging.info(f"An unexpected error occurred in {region}")
 
-if __name__ == '__main__':
-    # Create an instance of VPCDeployer and run load_config_and_deploy
-    deployer_instance = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
-    deployer_instance.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
+    def deploy(self):
+        logging.debug(f"Debug of load_config: config={self.config}, name_prefix={self.name_prefix}")
+
+        # Call the main method directly instead of creating a new instance
+        self.main()

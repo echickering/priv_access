@@ -41,6 +41,18 @@ def setup_logging():
 def main():
     setup_logging()  # Call the setup_logging function
 
+    # Load the configuration from config.yml
+    with open('./config/config.yml', 'r') as file:
+        config = yaml.safe_load(file)
+
+    # Load the VPC base template yml
+    with open('./config/vpc_template.yml', 'r') as file:
+        vpc_template = yaml.safe_load(file)
+
+    # Load the EC2 base template yml
+    with open('./config/ec2_template.yml', 'r') as file:
+        ec2_template = yaml.safe_load(file)
+
     # Initialize aws credentials
     aws_credentials = AWSUtil.load_aws_credentials('./config/aws_credentials.yml')
 
@@ -54,30 +66,26 @@ def main():
     ngfw_token = ngfw.retrieve_token()
     ngfw_url = ngfw.ngfw_url
 
-    # Update EC2 CloudFormation template based on min/max ec2 count
-    ec2_template_updater = UpdateEc2Template('./config/config.yml', './config/ec2_template.yml')
-    ec2_template_updater.update_templates()
-    logging.info("EC2 template updated based on min/max EC2 count.")
-
     # Update VPC CloudFormation template based on region and availability zones / local zones chosen
-    vpc_template_updater = UpdateVpcTemplate('./config/config.yml', './config/vpc_template.yml')
+    vpc_template_updater = UpdateVpcTemplate(config, vpc_template)
     vpc_template_updater.update_templates()
     logging.info("VPC region template updated based on availability zones from config.yml....")
 
+    # Update EC2 CloudFormation template based on min/max ec2 count
+    ec2_template_updater = UpdateEc2Template(config, ec2_template)
+    ec2_template_updater.update_templates()
+    logging.info("EC2 template updated based on min/max EC2 count.")
+
     # Create an instance of VPCDeployer
-    deployer_vpc = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
+    deployer_vpc = VPCDeployer(config, aws_credentials)
+    deployer_vpc.deploy()
 
     # Create an instance of EC2Deployer
-    ec2_deployer = EC2Deployer()
-
-    # Call the VPC per region
-    deployer_vpc.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
-
-    # Deploy EC2 Instances per region
+    ec2_deployer = EC2Deployer(config, aws_credentials)
     ec2_deployer.deploy()
 
     # Initialize FetchState class
-    fetch_data = FetchState('./config/config.yml', './config/aws_credentials.yml')
+    fetch_data = FetchState(config, aws_credentials)
     state_data = fetch_data.fetch_and_process_state()
 
     # Print the fetched and processed state data
@@ -87,34 +95,20 @@ def main():
         for key, value in data.items():
             logging.info(f"  {key}: {value}")
         logging.info("")  # Add a newline for better readability
-
-    # Load the configuration from config.yml
-    with open('./config/config.yml', 'r') as file:
-        config = yaml.safe_load(file)
-
-    #Obtain the Panorama TemplateStack information
-    template_name = config['palo_alto']['panorama']['PanoramaTemplate']
-    tpl_stack_name = config['palo_alto']['panorama']['PanoramaTemplateStack']
-    dg_name = config['palo_alto']['panorama']['PanoramaDeviceGroup']
-    license_manager = config['palo_alto']['panorama']['LicenseManager'] #license manager name used for sw_fw_license plugin in panorama
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, panorama_token, panorama_url, state_data, license_manager)
+    updater = UpdatePanorama(config, panorama_token, panorama_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
 
     #Create an instance of UpdateNGFW
-    ngfw_updater = UpdateNGFW(config, template_name, ngfw_token, ngfw_url, state_data)
+    ngfw_updater = UpdateNGFW(config, ngfw_token, ngfw_url, state_data)
 
     ngfw_updater.update_ngfw()
 
     # # Initialize Route53Updater
-    hosted_zone_id = config['aws']['hosted_zone_id']  # Correct key for hosted zone ID
-    domain = config['aws']['domain']  # Ensure this key exists and is set to "securesaccess.com" or your desired domain
-    portal_domain = config['aws']['portal_fqdn'] #This is your portal address - example "portal.securesaccess.com"
-
-    route53_updater = Route53Updater(aws_credentials, hosted_zone_id, domain, portal_domain)
+    route53_updater = Route53Updater(aws_credentials, config)
     route53_updater.update_dns_records(state_data)
 
 if __name__ == '__main__':
