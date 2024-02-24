@@ -1,10 +1,12 @@
 # project/main.py
 import logging
 import yaml
+import sys
 from logging.handlers import TimedRotatingFileHandler
 from aws.aws_creds import AWSUtil
 from api.palo_token import PaloToken
 from panorama.update_panorama2 import UpdatePanorama
+from vpn_manager.update_ngfw import UpdateNGFW
 from aws.update_vpc_template import UpdateVpcTemplate
 from aws.update_ec2_template2 import UpdateEc2Template
 from aws.deploy_vpc2 import VPCDeployer
@@ -40,18 +42,22 @@ def main():
     setup_logging()  # Call the setup_logging function
 
     # Initialize aws credentials
-    aws_credentials = AWSUtil.load_aws_credentials()
+    aws_credentials = AWSUtil.load_aws_credentials('./config/aws_credentials.yml')
 
-    # Load PAN credentials
-    palo_token = PaloToken()
-    token = palo_token.retrieve_token()
-    base_url = palo_token.ngfw_url
+    # Load Panorama credentials
+    panorama = PaloToken('./config/pan_credentials.yml')
+    panorama_token = panorama.retrieve_token()
+    panorama_url = panorama.ngfw_url
 
-    # Initialize DynamoDBManager 
-    # dynamodb_manager = DynamoDBManager(aws_credentials=aws_credentials, table_name="MobileUserPool")
+    # Load NGFW credentials
+    ngfw = PaloToken('./config/ngfw_credentials.yml')
+    ngfw_token = ngfw.retrieve_token()
+    ngfw_url = ngfw.ngfw_url
 
-    # Create a DynamoDB table if it doesn't exist
-    # dynamodb_manager.create_table_if_not_exists()
+    # Update EC2 CloudFormation template based on min/max ec2 count
+    ec2_template_updater = UpdateEc2Template('./config/config.yml', './config/ec2_template.yml')
+    ec2_template_updater.update_templates()
+    logging.info("EC2 template updated based on min/max EC2 count.")
 
     # Update VPC CloudFormation template based on region and availability zones / local zones chosen
     vpc_template_updater = UpdateVpcTemplate('./config/config.yml', './config/vpc_template.yml')
@@ -61,16 +67,12 @@ def main():
     # Create an instance of VPCDeployer
     deployer_vpc = VPCDeployer(None, None)  # Pass None as placeholders for config and credentials
 
-    # Call the load_config_and_deploy method on the instance
-    deployer_vpc.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
-
-    # Update EC2 CloudFormation template based on min/max ec2 count
-    ec2_template_updater = UpdateEc2Template('./config/config.yml', './config/ec2_template.yml')
-    ec2_template_updater.update_templates()
-    logging.info("EC2 template updated based on min/max EC2 count.")
-
     # Create an instance of EC2Deployer
     ec2_deployer = EC2Deployer()
+
+    # Call the VPC per region
+    deployer_vpc.load_config_and_deploy('./config/config.yml', './config/aws_credentials.yml')
+
     # Deploy EC2 Instances per region
     ec2_deployer.deploy()
 
@@ -97,10 +99,15 @@ def main():
     license_manager = config['palo_alto']['panorama']['LicenseManager'] #license manager name used for sw_fw_license plugin in panorama
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, token, base_url, state_data, license_manager)
+    updater = UpdatePanorama(config, template_name, tpl_stack_name, dg_name, panorama_token, panorama_url, state_data, license_manager)
 
     # Call the update_panorama method
     updater.update_panorama()
+
+    #Create an instance of UpdateNGFW
+    ngfw_updater = UpdateNGFW(config, template_name, ngfw_token, ngfw_url, state_data)
+
+    ngfw_updater.update_ngfw()
 
     # # Initialize Route53Updater
     hosted_zone_id = config['aws']['hosted_zone_id']  # Correct key for hosted zone ID
@@ -111,4 +118,9 @@ def main():
     route53_updater.update_dns_records(state_data)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        # Optional: Perform any cleanup here or log that the script is exiting
+        print(f"Exiting script with code {e.code}")
+        sys.exit(e.code)
