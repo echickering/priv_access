@@ -7,15 +7,16 @@ import time
 import json
 
 class UpdatePanorama:
-    def __init__(self, config, template, stack_name, dg_name, token, base_url, state_data, license_manager):
+    def __init__(self, config, token, base_url, state_data):
         self.config = config
-        self.template = template
-        self.stack_name = stack_name
-        self.dg_name = dg_name
         self.token = token
         self.base_url = base_url
         self.state_data = state_data
-        self.license_manager = license_manager
+        self.license_manager = self.config['palo_alto']['panorama']['LicenseManager']
+        self.template = self.config['palo_alto']['panorama']['PanoramaTemplate']
+        self.stack_name = self.config['palo_alto']['panorama']['PanoramaTemplateStack']
+        self.dg_name = self.config['palo_alto']['panorama']['PanoramaDeviceGroup']
+        self.vr_name = self.config['palo_alto']['panorama']['VirtualRouter']
 
     def fetch_devices_from_template_stack(self, logger):
         headers = {
@@ -184,12 +185,15 @@ class UpdatePanorama:
         logger.info(f'Site Data: {site_data}')
 
         # Ensure iteration over each site in the site_data
-        for site, ip_addr in site_data.items():
-            logger.info(f"Processing {site} with IP address {ip_addr}")
+        for site, details in site_data.items():
+            logger.info(f"Processing {site} with IP address {details['ike_peer_ip']} and Loopback {details['bgp_peer_ip']}")
             template = self.template
             prof_name = f'{template}-IKE_GW'
             ike_gw_name = f'{prof_name}_{site}'
             psk = self.config['vpn']['crypto_settings']['ike_gw']['psk']
+            bgp_peer_ip = details['bgp_peer_ip']
+            ike_peer_ip = details['ike_peer_ip']
+            bgp_peer_as = details['as_number']
             xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/gateway/entry[@name='{ike_gw_name}']"
             element = f"""
                 <authentication>
@@ -218,7 +222,7 @@ class UpdatePanorama:
                     </fragmentation>
                 </protocol-common>
                 <peer-address>
-                    <ip>{ip_addr}</ip>
+                    <ip>{ike_peer_ip}</ip>
                 </peer-address>
                 <local-id>
                     <id>$untrust_ip_base</id>
@@ -234,13 +238,14 @@ class UpdatePanorama:
             if "command succeeded" in status:
                 logger.info(f"Ike Gateway {ike_gw_name} set {status}")
                 count += 1
-                self.set_tunnel_interface(logger, count, ike_gw_name, ipsec_prof_name)
+                self.set_tunnel_interface(logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
             else:
                 logger.error(f"Response from Panorama:\n{response.text}")
                 return
+        else:
+            logger.info(f'No site data in VPN config')
 
-    def set_tunnel_interface(self, logger, count, ike_gw_name, ipsec_prof_name):
-        vr_name = self.config['palo_alto']['panorama']['VirtualRouter']
+    def set_tunnel_interface(self, logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
 
         xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/interface/tunnel/units"
         element = f"<entry name='tunnel.{count}'/>"
@@ -267,7 +272,7 @@ class UpdatePanorama:
         else:
             logger.error(f"Failed to set tunnel {count}: {response.text}")
 
-        xpath3 = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{vr_name}']/interface"
+        xpath3 = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/interface"
         element3 = f"<member>tunnel.{count}</member>"
         payload3 = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath3, 'element': element3}
         response3 = requests.post(self.base_url, params=payload3, verify=True)
@@ -275,13 +280,13 @@ class UpdatePanorama:
         root = ET.fromstring(response3.content)
         status = root.find('.//msg').text
         if "command succeeded" in status:
-            logger.info(f"Tunnel {count} added to VR: {vr_name}")
-            self.set_zone(logger, count, ike_gw_name, ipsec_prof_name)
+            logger.info(f"Tunnel {count} added to VR: {self.vr_name}")
+            self.set_zone(logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
             count += 1
         else:
             logger.error(f"Failed to set tunnel {count}: {response.text}")
 
-    def set_zone(self, logger, tunnel, ike_gw_name, ipsec_prof_name):
+    def set_zone(self, logger, tunnel, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
         zone = self.config['palo_alto']['panorama']['BranchZone']
         tunnel_name = f'tunnel.{tunnel}'
 
@@ -295,11 +300,11 @@ class UpdatePanorama:
         status = root.find('.//msg').text
         if "command succeeded" in status:
             logger.info(f"Tunnel {tunnel_name} zone set successfully")
-            self.set_ipsec_tunnel(logger, tunnel_name, ike_gw_name, ipsec_prof_name)
+            self.set_ipsec_tunnel(logger, tunnel_name, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
         else:
             logger.error(f"Failed to update tunnel zone {tunnel_name}: {response.text}")
 
-    def set_ipsec_tunnel(self, logger, tunnel_name, ike_gw_name, ipsec_prof_name):
+    def set_ipsec_tunnel(self, logger, tunnel_name, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
         # Set all variables to template based on the first instance, eventually each device will be overwritten.
         # Extract only the keys that start with 'site'
         ipsec_name =ike_gw_name.replace('IKE_GW','IPSEC')
@@ -313,9 +318,92 @@ class UpdatePanorama:
         status = root.find('.//msg').text
         if status == "command succeeded":
             logger.info(f"IPsec tunnel {ipsec_name} set {status}")
+            self.set_tunnel_static_route(logger, tunnel_name, ike_gw_name, bgp_peer_ip, bgp_peer_as)
         else:
             logger.error(f"Response from Panorama:\n{response.text}")
 
+    def set_tunnel_static_route(self, logger, tunnel_name, ike_gw_name, bgp_peer_ip, bgp_peer_as):
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/routing-table/ip/static-route/entry[@name='{ike_gw_name}']"
+        element = f"<bfd><profile>None</profile></bfd><interface>{tunnel_name}</interface><metric>10</metric><destination>{bgp_peer_ip}/32</destination><route-table><unicast/></route-table>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+        
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.info(f"Peer Loopback {bgp_peer_ip} route set {status}")
+            self.set_bgp_peer_group(logger, ike_gw_name, bgp_peer_ip, bgp_peer_as)
+        else:
+            logger.error(f"Response from Panorama:\n{response.text}")            
+
+    def set_bgp_peer_group(self, logger, ike_gw_name, bgp_peer_ip, bgp_peer_as):
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/protocol/bgp/peer-group/entry[@name='{ike_gw_name}']"
+        element = f"""
+        <type>
+            <ebgp>
+                <remove-private-as>no</remove-private-as>
+                <import-nexthop>original</import-nexthop>
+                <export-nexthop>resolve</export-nexthop>
+            </ebgp>
+        </type>
+        <peer>
+            <entry name="{ike_gw_name}-Peer">
+                <peer-address>
+                    <ip>{bgp_peer_ip}</ip>
+                </peer-address>
+                <connection-options>
+                    <incoming-bgp-connection>
+                        <remote-port>0</remote-port>
+                        <allow>yes</allow>
+                    </incoming-bgp-connection>
+                    <outgoing-bgp-connection>
+                        <local-port>0</local-port>
+                        <allow>yes</allow>
+                    </outgoing-bgp-connection>
+                    <multihop>2</multihop>
+                    <keep-alive-interval>30</keep-alive-interval>
+                    <open-delay-time>0</open-delay-time>
+                    <hold-time>90</hold-time>
+                    <idle-hold-time>15</idle-hold-time>
+                    <min-route-adv-interval>30</min-route-adv-interval>
+                </connection-options>
+                <subsequent-address-family-identifier>
+                    <unicast>yes</unicast>
+                    <multicast>no</multicast>
+                </subsequent-address-family-identifier>
+                <local-address>
+                    <ip>$trust_secondary_ip</ip>
+                    <interface>loopback.2</interface>
+                </local-address>
+                <bfd>
+                    <profile>Inherit-vr-global-setting</profile>
+                </bfd>
+                <max-prefixes>5000</max-prefixes>
+                <enable>yes</enable>
+                <peer-as>{bgp_peer_as}</peer-as>
+                <enable-mp-bgp>no</enable-mp-bgp>
+                <address-family-identifier>ipv4</address-family-identifier>
+                <enable-sender-side-loop-detection>yes</enable-sender-side-loop-detection>
+                <reflector-client>non-client</reflector-client>
+                <peering-type>unspecified</peering-type>
+            </entry>
+        </peer>
+        <aggregated-confed-as-path>yes</aggregated-confed-as-path>
+        <soft-reset-with-stored-info>no</soft-reset-with-stored-info>
+        <enable>yes</enable>
+        """.strip()
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+        
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.info(f"BGP PeerGroup {ike_gw_name} set {status}")
+        else:
+            logger.error(f"Response from Panorama:\n{response.text}")
+  
     def get_devices(self, logger):
         devices_list = []
         try:
@@ -372,19 +460,20 @@ class UpdatePanorama:
 
     def update_device_variables(self, serial, details, logger):
         logger.info(f"Processing device with serial {serial} and management IP {details['mgmt_ip']}")
-        self.update_variable(serial, '$trust_ip', details['trust_ip'], logger)
-        self.update_variable(serial, '$trust_ip_base', details['trust_ip_base'], logger)
-        self.update_variable(serial, '$trust_secondary_ip', details['trust_secondary_ip'], logger)
-        self.update_variable(serial, '$untrust_ip', details['untrust_ip'], logger)
-        self.update_variable(serial, '$untrust_ip_base', details['untrust_ip_base'], logger)
-        self.update_variable(serial, '$untrust_router_id', details['untrust_router_id'], logger)
-        self.update_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
-        self.update_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
-        self.update_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
-        self.update_variable(serial, '$vpn_user_pool', details['vpn_user_pool'], logger)
+        self.update_ipnetmask_variable(serial, '$trust_ip', details['trust_ip'], logger)
+        self.update_ipnetmask_variable(serial, '$trust_ip_base', details['trust_ip_base'], logger)
+        self.update_ipnetmask_variable(serial, '$trust_secondary_ip', details['trust_secondary_ip'], logger)
+        self.update_ipnetmask_variable(serial, '$untrust_ip', details['untrust_ip'], logger)
+        self.update_ipnetmask_variable(serial, '$untrust_ip_base', details['untrust_ip_base'], logger)
+        self.update_ipnetmask_variable(serial, '$untrust_router_id', details['untrust_router_id'], logger)
+        self.update_ipnetmask_variable(serial, '$trust_nexthop', details['trust_nexthop'], logger)
+        self.update_ipnetmask_variable(serial, '$untrust_nexthop', details['untrust_nexthop'], logger)
+        self.update_ipnetmask_variable(serial, '$public_untrust_ip', details['public_untrust_ip'], logger)
+        self.update_ipnetmask_variable(serial, '$vpn_user_pool', details['vpn_user_pool'], logger)
+        self.update_as_variable(serial, '$eBGP_AS', details['eBGP_AS'], logger)
         logger.info(f"Updated variables for device with serial {serial}.")
 
-    def update_variable(self, serial, variable_name, value, logger):
+    def update_ipnetmask_variable(self, serial, variable_name, value, logger):
         # XPath
         xpath = f"/config/devices/entry[@name='localhost.localdomain']/template-stack/entry[@name='{self.stack_name}']/devices/entry[@name='{serial}']/variable/entry[@name='{variable_name}']/type"
         # XML element
@@ -401,7 +490,25 @@ class UpdatePanorama:
             logger.info(f"Variable device override {variable_name} set {status}")
         else:
             logger.error(f"Response from Panorama:\n{response.text}")
-    
+
+    def update_as_variable(self, serial, variable_name, value, logger):
+        # XPath
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template-stack/entry[@name='{self.stack_name}']/devices/entry[@name='{serial}']/variable/entry[@name='{variable_name}']/type"
+        # XML element
+        element = f"<as-number>{value}</as-number>"
+        # Payload
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        # Log the request content
+        logger.debug(f"Request to Panorama: {payload}")
+        # Make the request and log the response
+        response = requests.post(self.base_url, params=payload, verify=True)
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.info(f"Variable device override {variable_name} set {status}")
+        else:
+            logger.error(f"Response from Panorama:\n{response.text}")
+
     def commit_panorama(self, logger):
         payload = {'type': 'commit', 'cmd': '<commit></commit>', 'key': self.token }
         response = requests.post(self.base_url, params=payload, verify=True)
@@ -412,7 +519,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=360):
+    def commit_dg_tpl_stack(self, logger, delay=3):
         cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
         payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay//60} minutes for devices to stablize during onboarding')

@@ -116,6 +116,10 @@ class Route53Updater:
         return current_records
 
     def update_dns_records(self, state_data):
+        """
+        Main method that is called by your main.py script. It fetches all current records, prepares desired records
+        and removes orphaned records that match Portal or Gateway subdomains
+        """
         current_records = self.fetch_current_records()
         desired_records = self.prepare_desired_records(state_data)
         

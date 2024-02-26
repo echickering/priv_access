@@ -4,9 +4,9 @@ import ipaddress
 import logging
 
 class FetchState:
-    def __init__(self, config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml'):
-        self.config = self.load_yaml_file(config_path)
-        self.aws_credentials = self.load_yaml_file(aws_credentials_path)['aws_credentials']
+    def __init__(self, config, aws_credentials):
+        self.config = config
+        self.aws_credentials = aws_credentials
         self.cf_clients = {}
 
     def load_yaml_file(self, file_path):
@@ -117,7 +117,9 @@ class FetchState:
                     trust_ip_single = f"{trust_ip_base}" if trust_ip_base else None
 
                     gp_pool_key = f'user_pool{instance_num}'
+                    ebgp_as_key = f'ebgp_as{instance_num}'
                     gp_pool = self.config['aws']['Regions'][region]['availability_zones'][az]['globalprotect'].get(gp_pool_key, 'N/A')
+                    ebgp_as = self.config['aws']['Regions'][region]['availability_zones'][az]['globalprotect'].get(ebgp_as_key, 'N/A')
 
                     # Use a more descriptive key to ensure uniqueness
                     state_key = f'{az}_instance_{instance_num}'
@@ -133,12 +135,7 @@ class FetchState:
                         'trust_nexthop': trust_nexthop,
                         'mgmt_ip': mgmt_ip,
                         'vpn_user_pool': gp_pool,
+                        'eBGP_AS': ebgp_as
                     }
 
         return state
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    fetch_state = FetchState(config_path='./config/config.yml', aws_credentials_path='./config/aws_credentials.yml')
-    state = fetch_state.fetch_and_process_state()
-    print(state)
