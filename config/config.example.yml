@@ -1,3 +1,4 @@
+#project/config/config.yml
 aws:
   Tags:  # Add a Tags section here
     Project: "YourProjectName"
@@ -6,8 +7,9 @@ aws:
     AdditionalTag: "Value"
   #Update StackName to what you'd like as this is the CFT that deploys the VPC
   StackName: "PrivateAccess"
-  hosted_zone_id: "Z060987032UDOJ7WQIY6A" #AWS Route53 Hosted Zone ID #
+  hosted_zone_id: "Z060647032UDOJ7WQIY6A" #AWS Route53 Hosted Zone ID #
   domain: "mydomain.com" #AWS Domain associated to the Hosted Zone
+  portal_fqdn: "portal.domain.com"
   NamePrefix: "My-GP-" #NamePrefix for AWS Tag Name prefix. Alphanumeric and "-" only, must end with "-"
   Regions:
     us-east-1:
@@ -24,12 +26,12 @@ aws:
             untrust_subnet_cidr: "10.22.240.0/28" #Untrust subnet
             trust_subnet_cidr: "10.22.240.16/28" #Trust subnet
             globalprotect:
-              user_pool1: "10.0.0.0/23" #unique user pool for instance, list same number as max_ec2_count
+              user_pool1: "10.0.0.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
               user_pool2: "10.0.2.0/23"
               user_pool3: "10.0.4.0/23"
-              bgp_as1: "64600"
-              bgp_as2: "64600"
-              bgp_as3: "64600"
+              ebgp_as1: "64600"
+              ebgp_as2: "64601"
+              ebgp_as3: "64602"
           us-east-1-dfw-2a:
             az_name: us-east-1-dfw-2a #its just easier to do this
             NetworkBorderGroup: us-east-1-dfw-2 #just enter the region/local zone
@@ -39,12 +41,12 @@ aws:
             untrust_subnet_cidr: "10.22.240.32/28" #Untrust subnet
             trust_subnet_cidr: "10.22.240.48/28" #Trust subnet
             globalprotect:
-              user_pool1: "10.0.6.0/23" #unique user pool for instance, list same number as max_ec2_count
+              user_pool1: "10.0.6.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
               user_pool2: "10.0.8.0/23"
               user_pool3: "10.0.10.0/23"
-              bgp_as1: "64601"
-              bgp_as2: "64601"
-              bgp_as3: "64601"
+              ebgp_as1: "64603"
+              ebgp_as2: "64604"
+              ebgp_as3: "64605"
     us-east-2:
       vpc_cidr: "10.23.240.0/23"
       key_name: "us-east2"
@@ -54,19 +56,19 @@ aws:
             az_name: us-east-2a
             NetworkBorderGroup: us-east-2
             instance_type: "m6i.xlarge"
-            min_ec2_count: 2
+            min_ec2_count: 1
             max_ec2_count: 3
             untrust_subnet_cidr: "10.23.240.0/28" #Unrust subnet
             trust_subnet_cidr: "10.23.240.16/28" #Trust subnet
             tgw_id: tgw-0fd363e13bdb37843
             tgw_cidr: "10.1.120.0/24"
             globalprotect:
-              user_pool1: "10.0.12.0/23" #unique user pool for instance, list same number as max_ec2_count
+              user_pool1: "10.0.12.0/23" #update pool count based on min/max ec2 count. you can list more than max count, but don't list less than max
               user_pool2: "10.0.14.0/23"
               user_pool3: "10.0.16.0/23"
-              bgp_as1: "64602"
-              bgp_as2: "64602"
-              bgp_as3: "64602"
+              ebgp_as1: "64609"
+              ebgp_as2: "64610"
+              ebgp_as3: "64611"
         # Add more regions as needed
   
   EC2:
@@ -96,6 +98,10 @@ palo_alto:
     VirtualRouter: "PPA-Trust-VR"
     UserZoneName: "VPN-Users"
     BranchZone: "Branch"
+    LicenseManager: "PrivatePrismaLM" #license manager name used for sw_fw_license plugin in panorama
+  ngfw:
+    VirtualRouter: default
+    BranchZone: "AWS"
 
 vpn:
   crypto_settings:
@@ -110,12 +116,18 @@ vpn:
       dh_group: "group19"
       encryption: "aes-256-gcm"
     ike_gw: 
-      psk: "Gaius4132$"      
+      psk: "YourPSKHERE3434$$#$#"      
   mesh_vpn_settings:
     # Settings for full mesh VPN configuration
   on_prem_vpn_settings:
-    site1: "108.44.161.18"
-    site2: "108.44.161.20"
+    site1:
+      ike_peer_ip: "108.44.161.18"
+      bgp_peer_ip: "169.254.10.1"
+      as_number: "65000"
+    site2:
+      ike_peer_ip: "108.44.161.20"
+      bgp_peer_ip: "169.254.10.2"
+      as_number: "65000"
 
 ebgp:
   routing_settings:
