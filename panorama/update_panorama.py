@@ -24,14 +24,14 @@ class UpdatePanorama:
             'X-PAN-KEY': self.token,
             'Content-Type': 'application/x-www-form-urlencoded'  # Ensure headers are correctly set
         }
-        # Correctly encoding the payload for the request
+        
         payload = {
             'type': 'config',
-            'action': 'get',  # Making sure to use 'get' action
+            'action': 'get',  
             'xpath': f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.stack_name}']/devices"
         }
         logger.info(f"Fetching devices from template stack: {self.stack_name}")
-        # Making sure to send payload as data in the POST request
+        
         response = requests.post(self.base_url, headers=headers, data=payload, verify=True)
         logger.debug(f'Get device template stack Response: {response.content}')
         devices = {}
@@ -119,13 +119,13 @@ class UpdatePanorama:
             'X-PAN-KEY': self.token,
             'Content-Type': 'application/x-www-form-urlencoded'  # Ensure headers are correctly set
         }
-        # Correctly encoding the payload for the request
+        
         payload = {
             'type': 'config',
-            'action': 'get',  # Making sure to use 'get' action
+            'action': 'get',  
             'xpath': f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/protocol/bgp/peer-group"
         }
-        # Making sure to send payload as data in the POST request
+        
         response = requests.post(self.base_url, headers=headers, data=payload, verify=True)
         logger.debug(f"Fetching router: {self.inside_vr_name} and peer groups {response.text}")
 
@@ -149,13 +149,13 @@ class UpdatePanorama:
             'X-PAN-KEY': self.token,
             'Content-Type': 'application/x-www-form-urlencoded'
         }
-        # Correctly encoding the payload for the request
+        
         payload = {
             'type': 'config',
             'action': 'delete',
             'xpath': f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='PPA-TPL']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/protocol/bgp/peer-group/entry[@name='{pg_name}']"
         }
-        # Making sure to send payload as data in the POST request
+        
         response = requests.post(self.base_url, headers=headers, data=payload, verify=True)
         root = ET.fromstring(response.content)
         status = root.find('.//msg').text
@@ -569,7 +569,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=3):
+    def commit_dg_tpl_stack(self, logger, delay=360):
         cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
         payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay//60} minutes for devices to stablize during onboarding')
