@@ -16,7 +16,8 @@ class UpdatePanorama:
         self.template = self.config['palo_alto']['panorama']['PanoramaTemplate']
         self.stack_name = self.config['palo_alto']['panorama']['PanoramaTemplateStack']
         self.dg_name = self.config['palo_alto']['panorama']['PanoramaDeviceGroup']
-        self.vr_name = self.config['palo_alto']['panorama']['VirtualRouter']
+        self.outside_vr_name = self.config['palo_alto']['panorama']['OutsideVirtualRouter']
+        self.inside_vr_name = self.config['palo_alto']['panorama']['InsideVirtualRouter']
 
     def fetch_devices_from_template_stack(self, logger):
         headers = {
@@ -113,6 +114,56 @@ class UpdatePanorama:
             else:
                 logger.error(f"Response from Panorama:\n{response.text}")
 
+    def clean_existing_routing(self, logger):
+        headers = {
+            'X-PAN-KEY': self.token,
+            'Content-Type': 'application/x-www-form-urlencoded'  # Ensure headers are correctly set
+        }
+        # Correctly encoding the payload for the request
+        payload = {
+            'type': 'config',
+            'action': 'get',  # Making sure to use 'get' action
+            'xpath': f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/protocol/bgp/peer-group"
+        }
+        # Making sure to send payload as data in the POST request
+        response = requests.post(self.base_url, headers=headers, data=payload, verify=True)
+        logger.debug(f"Fetching router: {self.inside_vr_name} and peer groups {response.text}")
+
+        # Parse the XML response
+        root = ET.fromstring(response.text)
+        
+        # Find all peer-group entries
+        peer_groups = root.findall(".//peer-group/entry")        
+
+        for pg in peer_groups:
+            pg_name = pg.get('name')
+            logger.info(f"Found peer group: {pg_name}")
+            
+            # Check if the entry name starts with "PPA-TPL"
+            if pg_name.startswith(self.template):
+                logger.info(f"Deleting peer group: {pg_name}")
+                self.delete_peer_group(logger, pg_name)
+
+    def delete_peer_group(self, logger, pg_name):
+        headers = {
+            'X-PAN-KEY': self.token,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        # Correctly encoding the payload for the request
+        payload = {
+            'type': 'config',
+            'action': 'delete',
+            'xpath': f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='PPA-TPL']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/protocol/bgp/peer-group/entry[@name='{pg_name}']"
+        }
+        # Making sure to send payload as data in the POST request
+        response = requests.post(self.base_url, headers=headers, data=payload, verify=True)
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.debug(f"Deleted peer group: {pg_name}")
+        else:
+            logger.error(f"Response from Panorama deleting peer group {pg_name}:\n{response.text}")            
+
     def set_ipsec_crypto_profile(self, logger):
         # Set all variables to template based on the first instance, eventually each device will be overwritten.
         prof_name = self.config['vpn']['crypto_settings']['ipsec_crypto']['name']
@@ -137,7 +188,6 @@ class UpdatePanorama:
         payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
         logger.debug(f"Request to Panorama: {payload}")
         response = requests.post(self.base_url, params=payload, verify=True)
-        #
         root = ET.fromstring(response.content)
         status = root.find('.//msg').text
         if status == "command succeeded":
@@ -272,7 +322,7 @@ class UpdatePanorama:
         else:
             logger.error(f"Failed to set tunnel {count}: {response.text}")
 
-        xpath3 = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/interface"
+        xpath3 = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/interface"
         element3 = f"<member>tunnel.{count}</member>"
         payload3 = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath3, 'element': element3}
         response3 = requests.post(self.base_url, params=payload3, verify=True)
@@ -280,7 +330,7 @@ class UpdatePanorama:
         root = ET.fromstring(response3.content)
         status = root.find('.//msg').text
         if "command succeeded" in status:
-            logger.info(f"Tunnel {count} added to VR: {self.vr_name}")
+            logger.info(f"Tunnel {count} added to VR: {self.inside_vr_name}")
             self.set_zone(logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
             count += 1
         else:
@@ -323,7 +373,7 @@ class UpdatePanorama:
             logger.error(f"Response from Panorama:\n{response.text}")
 
     def set_tunnel_static_route(self, logger, tunnel_name, ike_gw_name, bgp_peer_ip, bgp_peer_as):
-        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/routing-table/ip/static-route/entry[@name='{ike_gw_name}']"
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/routing-table/ip/static-route/entry[@name='{ike_gw_name}']"
         element = f"<bfd><profile>None</profile></bfd><interface>{tunnel_name}</interface><metric>10</metric><destination>{bgp_peer_ip}/32</destination><route-table><unicast/></route-table>"
         payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
         logger.debug(f"Request to Panorama: {payload}")
@@ -338,7 +388,7 @@ class UpdatePanorama:
             logger.error(f"Response from Panorama:\n{response.text}")            
 
     def set_bgp_peer_group(self, logger, ike_gw_name, bgp_peer_ip, bgp_peer_as):
-        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.vr_name}']/protocol/bgp/peer-group/entry[@name='{ike_gw_name}']"
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{self.inside_vr_name}']/protocol/bgp/peer-group/entry[@name='{ike_gw_name}']"
         element = f"""
         <type>
             <ebgp>
@@ -585,6 +635,9 @@ class UpdatePanorama:
 
         # # Set Template Variables
         self.set_base_variable(logger)
+
+        # # Delete pre-existing routing and ipsec
+        self.clean_existing_routing(logger)
 
         # Set Crypto Profiles and Settings
         self.set_ipsec_crypto_profile(logger)
