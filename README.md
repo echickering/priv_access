@@ -164,7 +164,7 @@ aws:
               ebgp_as3: "64614"              
         # # Add more regions as needed
   EC2:
-    user_data: |
+    user_data: | # items with {} are variables, pulled from palo_alto:panorama below
       type=dhcp-client
       hostname={NamePrefix}
       auth-key={panorama_auth_key}
