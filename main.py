@@ -41,9 +41,9 @@ def setup_logging():
 def main():
     setup_logging()  # Call the setup_logging function
 
-    # Load the configuration from config.yml
+    # Load the configuration for aws from config.yml
     with open('./config/config.yml', 'r') as file:
-        config = yaml.safe_load(file)
+        aws_config = yaml.safe_load(file)
 
     # Load the VPC base template yml
     with open('./config/vpc_template.yml', 'r') as file:
@@ -67,25 +67,25 @@ def main():
     ngfw_url = ngfw.ngfw_url
 
     # Update VPC CloudFormation template based on region and availability zones / local zones chosen
-    vpc_template_updater = UpdateVpcTemplate(config, vpc_template)
+    vpc_template_updater = UpdateVpcTemplate(aws_config, vpc_template)
     vpc_template_updater.update_templates()
-    logging.info("VPC region template updated based on availability zones from config.yml....")
+    logging.info("VPC region template updated based on availability zones from aws_config.yml....")
 
     # Update EC2 CloudFormation template based on min/max ec2 count
-    ec2_template_updater = UpdateEc2Template(config, ec2_template)
+    ec2_template_updater = UpdateEc2Template(aws_config, ec2_template)
     ec2_template_updater.update_templates()
     logging.info("EC2 template updated based on min/max EC2 count.")
 
     # Create an instance of VPCDeployer
-    deployer_vpc = VPCDeployer(config, aws_credentials)
+    deployer_vpc = VPCDeployer(aws_config, aws_credentials)
     deployer_vpc.deploy()
 
     # Create an instance of EC2Deployer
-    ec2_deployer = EC2Deployer(config, aws_credentials)
+    ec2_deployer = EC2Deployer(aws_config, aws_credentials)
     ec2_deployer.deploy()
 
     # Initialize FetchState class
-    fetch_data = FetchState(config, aws_credentials)
+    fetch_data = FetchState(aws_config, aws_credentials)
     state_data = fetch_data.fetch_and_process_state()
 
     # Print the fetched and processed state data
@@ -97,18 +97,18 @@ def main():
         logging.info("")  # Add a newline for better readability
     
     # Create an instance of UpdatePanorama
-    updater = UpdatePanorama(config, panorama_token, panorama_url, state_data)
+    updater = UpdatePanorama(aws_config, panorama_token, panorama_url, state_data)
 
     # Call the update_panorama method
     updater.update_panorama()
 
     #Create an instance of UpdateNGFW
-    ngfw_updater = UpdateNGFW(config, ngfw_token, ngfw_url, state_data)
+    ngfw_updater = UpdateNGFW(aws_config, ngfw_token, ngfw_url, state_data)
 
     ngfw_updater.update_ngfw()
 
     # # Initialize Route53Updater
-    route53_updater = Route53Updater(aws_credentials, config)
+    route53_updater = Route53Updater(aws_credentials, aws_config)
     route53_updater.update_dns_records(state_data)
 
 if __name__ == '__main__':

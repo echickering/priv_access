@@ -4,7 +4,6 @@ import copy
 import os
 import re
 
-# Set up YAML loader and dumper
 def setup_yaml():
     yaml.SafeLoader.add_constructor('!Ref', lambda loader, node: {'Ref': loader.construct_scalar(node)})
     yaml.SafeLoader.add_constructor('!GetAtt', lambda loader, node: {'Fn::GetAtt': loader.construct_scalar(node).split('.')})
