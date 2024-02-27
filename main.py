@@ -13,6 +13,7 @@ from aws.deploy_vpc2 import VPCDeployer
 from aws.deploy_ec22 import EC2Deployer
 from aws.fetch_state2 import FetchState
 from aws.route53_updater import Route53Updater
+from aws.cft_cleanup import StackCleanup
 from aws.dynamodb_manager import DynamoDBManager
 
 
@@ -65,6 +66,10 @@ def main():
     ngfw = PaloToken('./config/ngfw_credentials.yml')
     ngfw_token = ngfw.retrieve_token()
     ngfw_url = ngfw.ngfw_url
+
+    # Stack cleanup for removed regions
+    stack_cleanup = StackCleanup(aws_config, aws_credentials)
+    stack_cleanup.cleanup()
 
     # Update VPC CloudFormation template based on region and availability zones / local zones chosen
     vpc_template_updater = UpdateVpcTemplate(aws_config, vpc_template)

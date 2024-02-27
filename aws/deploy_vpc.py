@@ -101,7 +101,7 @@ class VPCDeployer:
             full_parameters = base_cf_parameters + az_parameters
 
             logging.info(f'Full CF Parameters: {full_parameters}')
-            result = self.deploy_stack(cf_client, template_body, full_parameters, stack_name=self.config['aws']['StackName'])
+            result = self.deploy_stack(cf_client, template_body, full_parameters, stack_name=self.config['aws']['StackNameVPC'])
 
             if result:
                 if result['Status'] in ["Update Initiated", "Creation Initiated"]:

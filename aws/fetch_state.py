@@ -42,7 +42,7 @@ class FetchState:
         return str(first_usable_ip), str(netmask)
 
     def process_vpc_subnet_data(self, region):
-        vpc_stack_name = self.config['aws']['StackName']
+        vpc_stack_name = self.config['aws']['StackNameVPC']
         vpc_outputs = self.fetch_stack_outputs(region, vpc_stack_name)
         subnet_data = {}
         az_counter = 1  # Counter based on the number of AZs in the region

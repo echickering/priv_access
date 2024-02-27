@@ -65,7 +65,7 @@ class EC2Deployer:
 
     def get_vpc_stack_outputs(self, cf_client):
         """Fetch outputs from the VPC CloudFormation stack."""
-        stack_name = self.config['aws']['StackName']
+        stack_name = self.config['aws']['StackNameVPC']
         try:
             response = cf_client.describe_stacks(StackName=stack_name)
             outputs = response['Stacks'][0]['Outputs']
