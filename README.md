@@ -206,7 +206,7 @@ vpn:
       dh_group: "group19"
       encryption: "aes-256-gcm"
     ike_gw: 
-      psk: "Gaius4132$"      
+      psk: "EnterYourPSKHere$" #PSK Support for now.. will figure a better way to do this eventually
   on_prem_vpn_settings:
     site1:
       ike_peer_ip: "108.44.161.18"
