@@ -479,28 +479,30 @@ class UpdatePanorama:
             return []
 
     def update_panorama_variables(self, logger, max_retries=240, delay=15):
-        # Initialize all devices in state_data as not connected
+        # Initialize all devices in state_data as not connected and not updated
         for _, details in self.state_data.items():
-            details['is_connected'] = False
+            details['is_connected'] = False # Assume device is not connected
+            details['is_updated'] = False  # Add an is_updated flag
 
         for attempt in range(max_retries):
             all_connected = True
             devices = self.get_devices(logger)  # Fetch devices from Panorama
 
-            # Check and update the connection status for each device in state_data
             for region, details in self.state_data.items():
-                matched_device = next((device for device in devices if device['ipv4'] == details['mgmt_ip']), None)
-                if matched_device:
-                    details['is_connected'] = True
-                    details['serial'] = matched_device['serial']  # Update state_data with serial number
-                    # Update Panorama variables for the matched device
-                    self.update_device_variables(matched_device['serial'], details, logger)
-                else:
-                    all_connected = False  # Not all devices are connected yet
+                if not details.get('is_updated'):  # Check if device hasn't been updated yet
+                    matched_device = next((device for device in devices if device['ipv4'] == details['mgmt_ip']), None)
+                    if matched_device:
+                        details['is_connected'] = True
+                        details['serial'] = matched_device['serial']
+                        if not details.get('is_updated'):  # Ensure update_device_variables is called only once
+                            self.update_device_variables(matched_device['serial'], details, logger)
+                            details['is_updated'] = True  # Mark as updated
+                    else:
+                        all_connected = False
 
             if all_connected:
                 logger.info("All devices in state_data are connected to Panorama.")
-                break  # Exit the loop if all devices are connected
+                break
             else:
                 logger.info(f'Waiting for all devices to connect. Retrying in {delay} seconds...Attempt: {attempt + 1} of Max Attempts: {max_retries}')
                 time.sleep(delay)
@@ -601,7 +603,6 @@ class UpdatePanorama:
                     # Handle the case where job failed but no devices are pending, meaning all have processed but some failed.
                     logger.info("Commit job completed with failures, but all relevant devices processed.")
                     return False
-
                 if not pending_devices:
                     logger.info(f"Commit job {job_id} completed successfully.")
                     return True
@@ -633,11 +634,17 @@ class UpdatePanorama:
         # Deactivate licenses for devices with unmatched IPs
         self.deactivate_license_if_unmatched(devices, logger)
 
-        # # Set Template Variables
-        self.set_base_variable(logger)
-
         # # Delete pre-existing routing and ipsec
         self.clean_existing_routing(logger)
+
+        # Check if state_data is empty before proceeding
+        if not self.state_data:
+            logger.info("No state data available. Committing changes to Panorama and exiting.")
+            self.commit_panorama(logger)
+            return  # Exit the method
+
+        # # Set Template Variables
+        self.set_base_variable(logger)
 
         # Set Crypto Profiles and Settings
         self.set_ipsec_crypto_profile(logger)

@@ -18,10 +18,14 @@ class StackCleanup:
         return regions
 
     def cleanup(self):
-        defined_regions = self.config['aws'].get('Regions', {}).keys()
+        if 'aws' in self.config and self.config['aws'].get('Regions'):
+            defined_regions = self.config['aws'].get('Regions', {}).keys()
+        else:
+            defined_regions = []
+        
         all_regions = self.get_all_regions()
-        regions_to_check = set(all_regions) - set(defined_regions)
-        logging.info(f'Regions to check: {regions_to_check}')
+        regions_to_check = set(all_regions) if not defined_regions else set(all_regions) - set(defined_regions)
+        logging.info(f'Regions to check for cleanup: {regions_to_check}')
 
         with ThreadPoolExecutor() as executor:
             futures = {executor.submit(self.delete_stacks, region): region for region in regions_to_check}

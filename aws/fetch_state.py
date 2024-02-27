@@ -86,6 +86,10 @@ class FetchState:
             return None, None
 
     def fetch_and_process_state(self):
+        # Check if 'Regions' key exists and has content
+        if 'Regions' not in self.config['aws'] or not self.config['aws']['Regions']:
+            return {}  # Return an empty dictionary if no regions are defined
+
         state = {}
 
         for region in self.config['aws']['Regions']:

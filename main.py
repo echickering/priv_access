@@ -8,10 +8,10 @@ from api.palo_token import PaloToken
 from panorama.update_panorama2 import UpdatePanorama
 from vpn_manager.update_ngfw import UpdateNGFW
 from aws.update_vpc_template import UpdateVpcTemplate
-from aws.update_ec2_template2 import UpdateEc2Template
-from aws.deploy_vpc2 import VPCDeployer
-from aws.deploy_ec22 import EC2Deployer
-from aws.fetch_state2 import FetchState
+from aws.update_ec2_template import UpdateEc2Template
+from aws.deploy_vpc import VPCDeployer
+from aws.deploy_ec2 import EC2Deployer
+from aws.fetch_state import FetchState
 from aws.route53_updater import Route53Updater
 from aws.cft_cleanup import StackCleanup
 from aws.dynamodb_manager import DynamoDBManager
@@ -71,26 +71,31 @@ def main():
     stack_cleanup = StackCleanup(aws_config, aws_credentials)
     stack_cleanup.cleanup()
 
-    # Update VPC CloudFormation template based on region and availability zones / local zones chosen
-    vpc_template_updater = UpdateVpcTemplate(aws_config, vpc_template)
-    vpc_template_updater.update_templates()
-    logging.info("VPC region template updated based on availability zones from aws_config.yml....")
+    # Check if 'Regions' is in aws_config and not empty
+    if 'Regions' in aws_config['aws'] and aws_config['aws']['Regions']:
+        # Proceed only if there are regions defined
 
-    # Update EC2 CloudFormation template based on min/max ec2 count
-    ec2_template_updater = UpdateEc2Template(aws_config, ec2_template)
-    ec2_template_updater.update_templates()
-    logging.info("EC2 template updated based on min/max EC2 count.")
+        # Update VPC CloudFormation template based on region and availability zones / local zones chosen
+        vpc_template_updater = UpdateVpcTemplate(aws_config, vpc_template)
+        vpc_template_updater.update_templates()
+        logging.info("VPC region template updated based on availability zones from aws_config.yml....")
 
-    # Create an instance of VPCDeployer
-    deployer_vpc = VPCDeployer(aws_config, aws_credentials)
-    deployer_vpc.deploy()
+        # Update EC2 CloudFormation template based on min/max ec2 count
+        ec2_template_updater = UpdateEc2Template(aws_config, ec2_template)
+        ec2_template_updater.update_templates()
+        logging.info("EC2 template updated based on min/max EC2 count.")
 
-    # Create an instance of EC2Deployer
-    ec2_deployer = EC2Deployer(aws_config, aws_credentials)
-    ec2_deployer.deploy()
+        # Create an instance of VPCDeployer
+        deployer_vpc = VPCDeployer(aws_config, aws_credentials)
+        deployer_vpc.deploy()
+
+        # Create an instance of EC2Deployer
+        ec2_deployer = EC2Deployer(aws_config, aws_credentials)
+        ec2_deployer.deploy()
 
     # Initialize FetchState class
     fetch_data = FetchState(aws_config, aws_credentials)
+    # State Data is returned, also it'll return empty if no regions are deployed... careful cause this will cause delicensing and route removal from panorama template
     state_data = fetch_data.fetch_and_process_state()
 
     # Print the fetched and processed state data
@@ -110,6 +115,7 @@ def main():
     #Create an instance of UpdateNGFW
     ngfw_updater = UpdateNGFW(aws_config, ngfw_token, ngfw_url, state_data)
 
+    #Call the update_ngfw method - these would be locally managed NGFW(not panorama managed)
     ngfw_updater.update_ngfw()
 
     # # Initialize Route53Updater
