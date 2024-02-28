@@ -153,7 +153,7 @@ vpn:
       dh_group: "group19"
       encryption: "aes-256-gcm"
     ike_gw: 
-      psk: "Gaius4132$"      
+      psk: "EnterYourPSKHere!@$$"      
   on_prem_vpn_settings:
     site1:
       ike_peer_ip: "108.44.161.18"

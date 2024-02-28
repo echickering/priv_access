@@ -22,6 +22,7 @@ class Route53Updater:
         'us-east-1-chi-2a': 'us-chicago',
         'us-east-1-dfw-2a': 'us-dallas',
         'us-east-1-atl-1a': 'us-atlanta',
+        'us-east-1-atl-2a': 'us-atlanta',
         'us-east-1-bos-1a': 'us-boston',
         'us-east-1-iah-2a': 'us-houston',
         'us-east-1-mci-1a': 'us-kansas',

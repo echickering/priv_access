@@ -1,6 +1,5 @@
 # project/aws/deploy_ec22.py
 import boto3
-import yaml
 import logging
 import base64
 import os
