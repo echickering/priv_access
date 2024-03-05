@@ -109,7 +109,7 @@ aws:
     #           ebgp_as3: "64614"              
         # # Add more regions as needed
 
-  EC2: # don't replace {} as these are variables to pull from palo_alto:panorama
+  EC2: # don't replace {} as these are variables to pull from palo_alto:panoramagit
     user_data: |
       type=dhcp-client
       hostname={NamePrefix}
