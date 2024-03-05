@@ -1,12 +1,13 @@
 #project/config/config.yml
 aws:
-  Tags:  # Add a Tags section here
+  Tags:  # Add a Tags section here.. This will be used, eventually, for "global tags"
     Project: "YourProjectName"
     Environment: "Production"
     Owner: "YourName"
     AdditionalTag: "Value"
   #Update StackName to what you'd like as this is the CFT that deploys the VPC
-  StackName: "PrivateAccess"
+  StackNameVPC: "PrivateAccess-VPC"
+  StackNameEC2: "PrivateAccess-EC2"
   hosted_zone_id: "Z060647032UDOJ7WQIY6A" #AWS Route53 Hosted Zone ID #
   domain: "mydomain.com" #AWS Domain associated to the Hosted Zone
   portal_fqdn: "portal.domain.com"
@@ -107,7 +108,8 @@ aws:
     #           ebgp_as2: "64613"
     #           ebgp_as3: "64614"              
         # # Add more regions as needed
-  EC2:
+
+  EC2: # don't replace {} as these are variables to pull from palo_alto:panorama
     user_data: |
       type=dhcp-client
       hostname={NamePrefix}
@@ -274,7 +276,7 @@ vpn:
     ike_gw: 
       psk: "YourPSKHERE3434$$#$#"      
   mesh_vpn_settings:
-    # Settings for full mesh VPN configuration
+    # Settings for full mesh VPN configuration.. placeholder... will figure it out.
   on_prem_vpn_settings:
     site1:
       ike_peer_ip: "108.44.161.18"
@@ -285,7 +287,7 @@ vpn:
       bgp_peer_ip: "169.254.10.2"
       as_number: "65000"
 
-ebgp:
+ebgp: # placeholder.. may find a way to use this versus manually defining for each region/zone
   routing_settings:
     PrivateAsRange: 64600-64630
     LoopBackCidr: 

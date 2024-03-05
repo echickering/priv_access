@@ -18,6 +18,8 @@ class UpdatePanorama:
         self.dg_name = self.config['palo_alto']['panorama']['PanoramaDeviceGroup']
         self.outside_vr_name = self.config['palo_alto']['panorama']['OutsideVirtualRouter']
         self.inside_vr_name = self.config['palo_alto']['panorama']['InsideVirtualRouter']
+        self.ipsec_prof_name = self.template + "_" + self.config['vpn']['crypto_settings']['ipsec_crypto']['name']
+        self.ike_prof_name = self.template + "_" + self.config['vpn']['crypto_settings']['ike_crypto']['name']
 
     def fetch_devices_from_template_stack(self, logger):
         headers = {
@@ -139,7 +141,7 @@ class UpdatePanorama:
             pg_name = pg.get('name')
             logger.info(f"Found peer group: {pg_name}")
             
-            # Check if the entry name starts with "PPA-TPL"
+            # Check if the entry name starts with your panorama template name
             if pg_name.startswith(self.template):
                 logger.info(f"Deleting peer group: {pg_name}")
                 self.delete_peer_group(logger, pg_name)
@@ -165,13 +167,10 @@ class UpdatePanorama:
             logger.error(f"Response from Panorama deleting peer group {pg_name}:\n{response.text}")            
 
     def set_ipsec_crypto_profile(self, logger):
-        # Set all variables to template based on the first instance, eventually each device will be overwritten.
-        prof_name = self.config['vpn']['crypto_settings']['ipsec_crypto']['name']
-        ipsec_prof_name = f'{self.template}_{prof_name}'
         auth = self.config['vpn']['crypto_settings']['ipsec_crypto']['auth']
         dh_group = self.config['vpn']['crypto_settings']['ipsec_crypto']['dh_group']
         encryption = self.config['vpn']['crypto_settings']['ipsec_crypto']['encryption']
-        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/crypto-profiles/ipsec-crypto-profiles/entry[@name='{ipsec_prof_name}']"
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/crypto-profiles/ipsec-crypto-profiles/entry[@name='{self.ipsec_prof_name}']"
         element = f"""
             <esp>
                 <authentication>
@@ -191,20 +190,19 @@ class UpdatePanorama:
         root = ET.fromstring(response.content)
         status = root.find('.//msg').text
         if status == "command succeeded":
-            logger.info(f"Ipsec Profile {ipsec_prof_name} set {status}")
-            self.set_ike_crypto_profile(logger, ipsec_prof_name)
+            logger.info(f"Ipsec Profile {self.ipsec_prof_name} set {status}")               
         else:
             logger.error(f"Response from Panorama:\n{response.text}")
 
 
-    def set_ike_crypto_profile(self, logger, ipsec_prof_name):
+    def set_ike_crypto_profile(self, logger):
         # Set all variables to template based on the first instance, eventually each device will be overwritten.
-        prof_name = self.config['vpn']['crypto_settings']['ike_crypto']['name']
-        ike_prof_name = f'{self.template}_{prof_name}'
+        # prof_name = self.config['vpn']['crypto_settings']['ike_crypto']['name']
+        # ike_prof_name = f'{self.template}_{prof_name}'
         auth = self.config['vpn']['crypto_settings']['ike_crypto']['auth']
         dh_group = self.config['vpn']['crypto_settings']['ike_crypto']['dh_group']
         encryption = self.config['vpn']['crypto_settings']['ike_crypto']['encryption']
-        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/crypto-profiles/ike-crypto-profiles/entry[@name='{ike_prof_name}']"
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/crypto-profiles/ike-crypto-profiles/entry[@name='{self.ike_prof_name}']"
         element = f"""<hash>
                 <member>{auth}</member>
               </hash>
@@ -224,78 +222,68 @@ class UpdatePanorama:
         root = ET.fromstring(response.content)
         status = root.find('.//msg').text
         if status == "command succeeded":
-            logger.info(f"Ike Profile {ike_prof_name} set {status}")
-            self.set_ike_gateway(logger, ike_prof_name, ipsec_prof_name)
+            logger.info(f"Ike Profile {self.ike_prof_name} set {status}")
         else:
             logger.error(f"Response from Panorama:\n{response.text}")
 
-    def set_ike_gateway(self, logger, ike_prof_name, ipsec_prof_name):
-        count = 7499
-        site_data = self.config['vpn']['on_prem_vpn_settings']
-        logger.info(f'Site Data: {site_data}')
+    def set_ike_gateway(self, logger, site, details, count):
+        logger.info(f"Processing {site} with IP address {details['ike_peer_ip']} and Loopback {details['bgp_peer_ip']}")
+        ike_gw_name = self.template + "_" + site
+        psk = self.config['vpn']['crypto_settings']['ike_gw']['psk']
+        bgp_peer_ip = details['bgp_peer_ip']
+        ike_peer_ip = details['ike_peer_ip']
+        bgp_peer_as = details['as_number']
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/gateway/entry[@name='{ike_gw_name}']"
+        element = f"""
+            <authentication>
+                <pre-shared-key>
+                    <key>{psk}</key>
+                </pre-shared-key>
+            </authentication>
+            <protocol>
+                <ikev2>
+                    <dpd>
+                        <enable>yes</enable>
+                    </dpd>
+                    <ike-crypto-profile>{self.ike_prof_name}</ike-crypto-profile>
+                </ikev2>
+                <version>ikev2</version>
+            </protocol>
+            <local-address>
+                <interface>ethernet1/1</interface>
+            </local-address>
+            <protocol-common>
+                <nat-traversal>
+                <enable>yes</enable>
+                </nat-traversal>
+                <fragmentation>
+                <enable>no</enable>
+                </fragmentation>
+            </protocol-common>
+            <peer-address>
+                <ip>{ike_peer_ip}</ip>
+            </peer-address>
+            <local-id>
+                <id>$untrust_ip_base</id>
+                <type>ipaddr</type>
+            </local-id>"""
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=False)  # Remember to handle SSL verification appropriately
 
-        # Ensure iteration over each site in the site_data
-        for site, details in site_data.items():
-            logger.info(f"Processing {site} with IP address {details['ike_peer_ip']} and Loopback {details['bgp_peer_ip']}")
-            template = self.template
-            prof_name = f'{template}-IKE_GW'
-            ike_gw_name = f'{prof_name}_{site}'
-            psk = self.config['vpn']['crypto_settings']['ike_gw']['psk']
-            bgp_peer_ip = details['bgp_peer_ip']
-            ike_peer_ip = details['ike_peer_ip']
-            bgp_peer_as = details['as_number']
-            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/ike/gateway/entry[@name='{ike_gw_name}']"
-            element = f"""
-                <authentication>
-                    <pre-shared-key>
-                        <key>{psk}</key>
-                    </pre-shared-key>
-                </authentication>
-                <protocol>
-                    <ikev2>
-                        <dpd>
-                            <enable>yes</enable>
-                        </dpd>
-                        <ike-crypto-profile>{ike_prof_name}</ike-crypto-profile>
-                    </ikev2>
-                    <version>ikev2</version>
-                </protocol>
-                <local-address>
-                    <interface>ethernet1/1</interface>
-                </local-address>
-                <protocol-common>
-                    <nat-traversal>
-                    <enable>yes</enable>
-                    </nat-traversal>
-                    <fragmentation>
-                    <enable>no</enable>
-                    </fragmentation>
-                </protocol-common>
-                <peer-address>
-                    <ip>{ike_peer_ip}</ip>
-                </peer-address>
-                <local-id>
-                    <id>$untrust_ip_base</id>
-                    <type>ipaddr</type>
-                </local-id>"""
-            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
-            logger.debug(f"Request to Panorama: {payload}")
-            response = requests.post(self.base_url, params=payload, verify=False)  # Remember to handle SSL verification appropriately
-
-            root = ET.fromstring(response.content)
-            status = root.find('.//msg').text
-            logging.info(f'Status of setting ike gateway: {status}')
-            if "command succeeded" in status:
-                logger.info(f"Ike Gateway {ike_gw_name} set {status}")
-                count += 1
-                self.set_tunnel_interface(logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
-            else:
-                logger.error(f"Response from Panorama:\n{response.text}")
-                return
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        logging.info(f'Status of setting ike gateway: {status}')
+        if "command succeeded" in status:
+            logger.info(f"Ike Gateway {ike_gw_name} set {status}")
+            self.set_tunnel_interface(logger, count, ike_gw_name, bgp_peer_ip, bgp_peer_as)
         else:
-            logger.info(f'No site data in VPN config')
+            logger.error(f"Response from Panorama:\n{response.text}")
+            return
+        # else:
+        #     logger.info(f'No site data in VPN config')
 
-    def set_tunnel_interface(self, logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
+    def set_tunnel_interface(self, logger, count, ike_gw_name, bgp_peer_ip, bgp_peer_as):
 
         xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/interface/tunnel/units"
         element = f"<entry name='tunnel.{count}'/>"
@@ -331,12 +319,12 @@ class UpdatePanorama:
         status = root.find('.//msg').text
         if "command succeeded" in status:
             logger.info(f"Tunnel {count} added to VR: {self.inside_vr_name}")
-            self.set_zone(logger, count, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
+            self.set_zone(logger, count, ike_gw_name, bgp_peer_ip, bgp_peer_as)
             count += 1
         else:
             logger.error(f"Failed to set tunnel {count}: {response.text}")
 
-    def set_zone(self, logger, tunnel, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
+    def set_zone(self, logger, tunnel, ike_gw_name, bgp_peer_ip, bgp_peer_as):
         zone = self.config['palo_alto']['panorama']['BranchZone']
         tunnel_name = f'tunnel.{tunnel}'
 
@@ -350,16 +338,16 @@ class UpdatePanorama:
         status = root.find('.//msg').text
         if "command succeeded" in status:
             logger.info(f"Tunnel {tunnel_name} zone set successfully")
-            self.set_ipsec_tunnel(logger, tunnel_name, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as)
+            self.set_ipsec_tunnel(logger, tunnel_name, ike_gw_name, bgp_peer_ip, bgp_peer_as)
         else:
             logger.error(f"Failed to update tunnel zone {tunnel_name}: {response.text}")
 
-    def set_ipsec_tunnel(self, logger, tunnel_name, ike_gw_name, ipsec_prof_name, bgp_peer_ip, bgp_peer_as):
+    def set_ipsec_tunnel(self, logger, tunnel_name, ike_gw_name, bgp_peer_ip, bgp_peer_as):
         # Set all variables to template based on the first instance, eventually each device will be overwritten.
         # Extract only the keys that start with 'site'
         ipsec_name =ike_gw_name.replace('IKE_GW','IPSEC')
         xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/tunnel/ipsec/entry[@name='{ipsec_name}']"
-        element = f"<tunnel-interface>{tunnel_name}</tunnel-interface><auto-key><ipsec-crypto-profile>{ipsec_prof_name}</ipsec-crypto-profile><ike-gateway><entry name='{ike_gw_name}'/></ike-gateway></auto-key>"
+        element = f"<tunnel-interface>{tunnel_name}</tunnel-interface><auto-key><ipsec-crypto-profile>{self.ipsec_prof_name}</ipsec-crypto-profile><ike-gateway><entry name='{ike_gw_name}'/></ike-gateway></auto-key>"
         payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
         logger.debug(f"Request to Panorama: {payload}")
         response = requests.post(self.base_url, params=payload, verify=True)
@@ -571,7 +559,7 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=360):
+    def commit_dg_tpl_stack(self, logger, delay=3):
         cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
         payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
         logger.info(f'Waiting {delay//60} minutes for devices to stablize during onboarding')
@@ -631,7 +619,7 @@ class UpdatePanorama:
         # Fetch devices from the template and their trust IPs
         devices = self.fetch_devices_from_template_stack(logger)
         
-        # Deactivate licenses for devices with unmatched IPs
+        # Deactivate licenses for devices with unmatched public IP... Note probably need better check mechnasim
         self.deactivate_license_if_unmatched(devices, logger)
 
         # # Delete pre-existing routing and ipsec
@@ -648,6 +636,17 @@ class UpdatePanorama:
 
         # Set Crypto Profiles and Settings
         self.set_ipsec_crypto_profile(logger)
+        self.set_ike_crypto_profile(logger)
+
+        # Set IKE Gateway and IPsec stuff
+        site_data = self.config['vpn']['on_prem_vpn_settings']
+        count = 7500 #We'll use this for tunnel.XXXX interface ID
+        logger.info(f'Site Data: {site_data}')
+        for site, details in site_data.items():
+            self.set_ike_gateway(logger, site, details, count)
+            count += 1
+        else:
+            logger.info(f'No site data in VPN config')                 
 
         # Call methods to update Panorama variables
         self.update_panorama_variables(logger)

@@ -5,7 +5,7 @@ import sys
 from logging.handlers import TimedRotatingFileHandler
 from aws.aws_creds import AWSUtil
 from api.palo_token import PaloToken
-from panorama.update_panorama2 import UpdatePanorama
+from panorama.update_panorama import UpdatePanorama
 from vpn_manager.update_ngfw import UpdateNGFW
 from aws.update_vpc_template import UpdateVpcTemplate
 from aws.update_ec2_template import UpdateEc2Template
