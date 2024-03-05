@@ -36,7 +36,7 @@ After installation, a template configuration file (`config.example.yml`) is auto
   - **subnet2_cidr_block**: Set the CIDR block for the trust subnet.
   - **ngfw_ami_id**: Specify the AWS AMI ID for the NGFW in each region.
   - **key_name**: Provide the SSH key name for accessing VMs in each region.
-  - **instance_type**: Current implementation all VMs are on same instance type. Verify instance type you choose is available in all regions
+  - **instance_type**: ability to run specific instance type within a AZ/Local Zone as not all regions/zones have same instance type offering
 - **EC2 Data**: Specify instance Type and user_data(for bootstrapping.)
   - **user_data**: set appropriate user data. Do not modify anything contained within { } as they are placeholders from EC2 deployment script(and pulled from palo_alto key)
 - **palo_alto** Panorama SW_FW_LICENSE plugin specifics
