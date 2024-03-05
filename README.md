@@ -1,6 +1,8 @@
 ## Welcome
 - **Purpose:** Create your own GlobalProtect automated solution on AWS(currently)
-- **Assumptions:** You have a Panorama, configured Template and Template Stack with All Network Interface, Routing, and GlobalProtect settings set with Variables.. As of now, SSL certificates are manually managed on Template
+- **Assumptions:** 
+  - **Panorama**: You have a Panorama, configured Template and Template Stack with two interfaces (eth1/1 and eth1/2), this is dual VR model for trust/untrust and VR are deployed. VR will bgp between to advertise default route and GP Pool only(you'll need to define import/export rules for now)
+  - **AWS**: You have your own Route53 hosted zone
 
 ### Step 1: Clone the Repository
 
