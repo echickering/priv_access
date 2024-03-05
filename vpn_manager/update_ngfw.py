@@ -4,7 +4,6 @@ import xml.etree.ElementTree as ET
 import urllib3
 import logging
 import time
-import json
 
 class UpdateNGFW:
     def __init__(self, config, token, base_url, state_data):

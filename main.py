@@ -112,11 +112,15 @@ def main():
     # Call the update_panorama method
     updater.update_panorama()
 
-    #Create an instance of UpdateNGFW
-    ngfw_updater = UpdateNGFW(aws_config, ngfw_token, ngfw_url, state_data)
+    '''
+    Below is commented out by default.. and work in progress.. but essentially it can autovpn deploy unmanaged 
+    NGFW(with advance route enabled currently) with instances deployed in AWS
+    '''
+    # #Create an instance of UpdateNGFW
+    # ngfw_updater = UpdateNGFW(aws_config, ngfw_token, ngfw_url, state_data)
 
-    #Call the update_ngfw method - these would be locally managed NGFW(not panorama managed)
-    ngfw_updater.update_ngfw()
+    # #Call the update_ngfw method - these would be locally managed NGFW(not panorama managed) and creating autovpn to AWS resources
+    # ngfw_updater.update_ngfw()
 
     # # Initialize Route53Updater
     route53_updater = Route53Updater(aws_credentials, aws_config)
