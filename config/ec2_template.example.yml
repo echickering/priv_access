@@ -154,10 +154,10 @@ Resources:
               Encrypted: false
               DeleteOnTermination: true
               VolumeSize: 60
-              VolumeType: gp3
+              VolumeType: gp2
 
   EC2Instance1:
-    DependsOn: MgmtInterfaceEIPAssociation1
+    DependsOn: PublicInterfaceEIPAssociation1
     Type: AWS::EC2::Instance
     Properties:
       LaunchTemplate:
