@@ -135,9 +135,11 @@ palo_alto:
     PanoramaDeviceGroup: PPA-DG
     OutsideVirtualRouter: "PPA-Untrust-VR"
     InsideVirtualRouter: "PPA-Trust-VR"
+    UntrustZone: "Untrust"
+    TrustZone: "Trust"
     UserZoneName: "VPN-Users"
     BranchZone: "Branch"
-    LicenseManager: "PrivatePrismaLM" #license manager name used for sw_fw_license plugin in panorama
+    LicenseManager: "BYOALM" #license manager name used for sw_fw_license plugin in panorama
   ngfw:
     VirtualRouter: default
     BranchZone: "AWS"

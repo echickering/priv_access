@@ -17,6 +17,8 @@ class UpdatePanorama:
         self.stack_name = self.config['palo_alto']['panorama']['PanoramaTemplateStack']
         self.dg_name = self.config['palo_alto']['panorama']['PanoramaDeviceGroup']
         self.outside_vr_name = self.config['palo_alto']['panorama']['OutsideVirtualRouter']
+        self.untrust_zone = self.config['palo_alto']['panorama']['UntrustZone']
+        self.trust_zone = self.config['palo_alto']['panorama']['TrustZone']
         self.inside_vr_name = self.config['palo_alto']['panorama']['InsideVirtualRouter']
         self.ipsec_prof_name = self.template + "_" + self.config['vpn']['crypto_settings']['ipsec_crypto']['name']
         self.ike_prof_name = self.template + "_" + self.config['vpn']['crypto_settings']['ike_crypto']['name']
@@ -62,7 +64,7 @@ class UpdatePanorama:
         return devices
 
     def deactivate_license_if_unmatched(self, devices, logger, delay=45):
-        logging.info(f'Devices seen when calling deactivate_license_if_unmatched: {devices}')
+        logger.info(f'Devices seen when calling deactivate_license_if_unmatched: {devices}')
         unmatched_devices = {serial: ip for serial, ip in devices.items() if ip not in [d['public_untrust_ip'] for d in self.state_data.values()]}
 
         for serial, public_untrust_ip in unmatched_devices.items():
@@ -165,6 +167,112 @@ class UpdatePanorama:
             logger.debug(f"Deleted peer group: {pg_name}")
         else:
             logger.error(f"Response from Panorama deleting peer group {pg_name}:\n{response.text}")            
+
+    def set_interface(self, logger, count, router, ip_addr, ip_addr_secondary, zone, route_name, dest_route, peer_router):
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/interface/ethernet/entry[@name='ethernet1/{count}']/layer3/ip"
+        element = f"<entry name='{ip_addr}'/>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if "command succeeded" in status:
+            logger.info(f"Ethernet/{count} set successfully")
+        else:
+            logger.error(f"Failed to set Ethernet/{count}: {response.text}")
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/interface/loopback/units/entry[@name='loopback.{count}']/ip"
+        element = f"<entry name='{ip_addr_secondary}'/>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        logger.debug(f'Loopback response: {response.content}')
+        if "command succeeded" in status:
+            logger.info(f"loopback.{count} set successfully")
+        else:
+            logger.error(f"Failed to set loopback.{count}: {response.text}")
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/zone/entry[@name='{zone}']/network/layer3"
+        element = f"<member>ethernet1/{count}</member>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if "command succeeded" in status:
+            logger.info(f"Ethernet1/{count} zone set successfully")
+        else:
+            logger.error(f"Failed to update interface zone ethernet1/{count}: {response.text}")
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/import/network/interface"
+        element = f"<member>ethernet1/{count}</member>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        response = requests.post(self.base_url, params=payload, verify=True)
+        logger.debug(f'Request to set vsys: {payload}')
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if "command succeeded" in status:
+            logger.info(f"Ethernet/{count} added to vsys1")
+        else:
+            logger.error(f"Failed to set ethernet/{count}: {response.text}")
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{router}']/interface"
+        element = f"<member>ethernet1/{count}</member>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        response = requests.post(self.base_url, params=payload, verify=True)
+        logger.debug(f'Request to set vsys: {payload}')
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if "command succeeded" in status:
+            logger.info(f"Ethernet/{count} added to VR: {router}")
+        else:
+            logger.error(f"Failed to set ethernet/{count} to router {router}: {response.text}")
+
+        if count == 1:
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{router}']/routing-table/ip/static-route/entry[@name='Default']"
+            element = f"<nexthop><ip-address>$untrust_nexthop</ip-address></nexthop><bfd><profile>None</profile></bfd><metric>10</metric><destination>0.0.0.0/0</destination><route-table><unicast/></route-table>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=True)
+            
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Router {router} default route set {status}")
+            else:
+                logger.error(f"Bad route command, Response from Panorama:\n{response.text}")   
+        if count == 2:
+            xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{router}']/routing-table/ip/static-route/entry[@name='Default']"
+            element = f"<nexthop><next-vr>{peer_router}</next-vr></nexthop><bfd><profile>None</profile></bfd><metric>10</metric><destination>0.0.0.0/0</destination><route-table><unicast/></route-table>"
+            payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+            logger.debug(f"Request to Panorama: {payload}")
+            response = requests.post(self.base_url, params=payload, verify=True)
+            
+            root = ET.fromstring(response.content)
+            status = root.find('.//msg').text
+            if status == "command succeeded":
+                logger.info(f"Router {router} default route set {status}")
+            else:
+                logger.error(f"Bad route command, Response from Panorama:\n{response.text}") 
+
+        xpath = f"/config/devices/entry[@name='localhost.localdomain']/template/entry[@name='{self.template}']/config/devices/entry[@name='localhost.localdomain']/network/virtual-router/entry[@name='{router}']/routing-table/ip/static-route/entry[@name='{route_name}']"
+        element = f"<nexthop><next-vr>{peer_router}</next-vr></nexthop><bfd><profile>None</profile></bfd><metric>10</metric><destination>{dest_route}</destination><route-table><unicast/></route-table>"
+        payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
+        logger.debug(f"Request to Panorama: {payload}")
+        response = requests.post(self.base_url, params=payload, verify=True)
+        
+        root = ET.fromstring(response.content)
+        status = root.find('.//msg').text
+        if status == "command succeeded":
+            logger.info(f"Peer Loopback {dest_route} route set {status}")
+        else:
+            logger.error(f"Bad route command, Response from Panorama:\n{response.text}")    
 
     def set_ipsec_crypto_profile(self, logger):
         auth = self.config['vpn']['crypto_settings']['ipsec_crypto']['auth']
@@ -269,11 +377,11 @@ class UpdatePanorama:
             </local-id>"""
         payload = {'type': 'config', 'action': 'set', 'key': self.token, 'xpath': xpath, 'element': element}
         logger.debug(f"Request to Panorama: {payload}")
-        response = requests.post(self.base_url, params=payload, verify=False)  # Remember to handle SSL verification appropriately
+        response = requests.post(self.base_url, params=payload, verify=True)  # Remember to handle SSL verification appropriately
 
         root = ET.fromstring(response.content)
         status = root.find('.//msg').text
-        logging.info(f'Status of setting ike gateway: {status}')
+        logger.info(f'Status of setting ike gateway: {status}')
         if "command succeeded" in status:
             logger.info(f"Ike Gateway {ike_gw_name} set {status}")
             self.set_tunnel_interface(logger, count, ike_gw_name, bgp_peer_ip, bgp_peer_as)
@@ -559,55 +667,93 @@ class UpdatePanorama:
         job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
         return job_id
 
-    def commit_dg_tpl_stack(self, logger, delay=3):
-        cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
-        payload = {'type': 'commit','action': 'all','cmd': cmd,'key': self.token}
-        logger.info(f'Waiting {delay//60} minutes for devices to stablize during onboarding')
-        time.sleep(delay)
-        response = requests.post(self.base_url, params=payload, verify=True)
-        logger.info(f"Response from commit-all operation:\n{response.text}")
+    def commit_dg_tpl_stack(self, logger, delay=300, max_retries=3, initial_delay=3):
+        # First, ensure all devices are connected
+        logger.info(f'Waiting {initial_delay} seconds for devices to onboard to panorama')
+        time.sleep(initial_delay)
+        for attempt in range(max_retries):
+            devices = self.get_devices(logger)  # Fetch devices from Panorama again
+            all_connected = True
 
-        # Parse the response and extract the job ID
-        root = ET.fromstring(response.content)
-        job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
-        return job_id
+            for _, details in self.state_data.items():
+                matched_device = next((device for device in devices if device['ipv4'] == details['mgmt_ip']), None)
+                if not matched_device or not details.get('is_connected'):
+                    all_connected = False
+                    break  # Exit the loop early if any device is not connected
+
+            if all_connected:
+                logger.info("All devices are connected to Panorama. Proceeding with commit.")
+                break  # Proceed with commit since all devices are connected
+            else:
+                logger.info(f"Waiting for all devices to connect. Retrying in {delay} seconds... Attempt: {attempt + 1}/{max_retries}")
+                time.sleep(delay)
+
+        if not all_connected:
+            logger.error("Not all devices connected to Panorama within the retry limit. Aborting commit.")
+            return None  # Return early if not all devices are connected
+
+        # If all devices are connected, proceed with the commit
+        retry_commit_count = 0
+        while retry_commit_count < max_retries:
+            cmd = f'<commit-all><shared-policy><force-template-values>yes</force-template-values><device-group><entry name="{self.dg_name}"/></device-group></shared-policy></commit-all>'
+            payload = {'type': 'commit', 'action': 'all', 'cmd': cmd, 'key': self.token}
+            logger.info(f"Initiating commit-all operation. Attempt: {retry_commit_count + 1}")
+            response = requests.post(self.base_url, params=payload, verify=False)  # Ensure proper SSL verification in production
+            logger.debug(f"Response from commit-all operation:\n{response.text}")
+
+            root = ET.fromstring(response.content)
+            job_id = root.find('.//result/job').text if root.find('.//result/job') is not None else None
+
+            # Check commit status with a modified version that looks for specific errors
+            commit_status, should_retry = self.check_commit_status(job_id, logger, max_retries=30, delay=10)
+            if commit_status and not should_retry:
+                return True
+            elif not commit_status and should_retry:
+                retry_commit_count += 1
+                logger.info(f'Retrying commit-all operation due to specific errors detected. Retry attempt: {retry_commit_count}')
+                time.sleep(delay)
+            else:
+                return False
+
+        logger.error(f'Max retries reached for commit-all operation. Please check device connectivity and configuration.')
+        return False
 
     def check_commit_status(self, job_id, logger, max_retries=30, delay=10):
         for attempt in range(max_retries):
             cmd = f'<show><jobs><id>{job_id}</id></jobs></show>'
             payload = {'type': 'op', 'cmd': cmd, 'key': self.token}
-            response = requests.post(self.base_url, params=payload, verify=True)
-            logger.debug(f"Response from job status check:\n{response.text}")
+            response = requests.post(self.base_url, params=payload, verify=False)  # Ensure proper SSL verification in production
+            logger.debug(f"Checking commit job {job_id} status: Attempt {attempt+1}")
 
             root = ET.fromstring(response.content)
             status = root.find('.//result/job/status').text if root.find('.//result/job/status') is not None else None
 
             if status == 'FIN':
-                job_result = root.find('.//result/job/result').text if root.find('.//result/job/result') is not None else None
-                devices = root.findall('.//result/job/devices/entry')
-                pending_devices = [device for device in devices if device.find('result').text == 'PEND']
+                result = root.find('.//result/job/result').text
+                errors = root.findall('.//errors/line')
+                error_messages = [error.text for error in errors]
 
-                if job_result == 'FAIL' and not pending_devices:
-                    # Handle the case where job failed but no devices are pending, meaning all have processed but some failed.
-                    logger.info("Commit job completed with failures, but all relevant devices processed.")
-                    return False
-                if not pending_devices:
-                    logger.info(f"Commit job {job_id} completed successfully.")
-                    return True
+                # Identify specific errors
+                specific_errors_detected = any("panw-bulletproof-ip-list" in message for message in error_messages)
+                if result == 'FAIL' and specific_errors_detected:
+                    logger.error(f"Specific errors detected in commit job {job_id}: {error_messages}")
+                    return False, True  # Indicate a retry should occur
+                elif result == 'FAIL':
+                    logger.error(f"Commit job {job_id} failed with errors: {error_messages}")
+                    return False, False
                 else:
-                    logger.info("Some devices are still pending. Waiting for completion.")
-                    time.sleep(delay)
-                    continue  # Wait for pending devices to complete
+                    logger.info(f"Commit job {job_id} completed successfully.")
+                    return True, False
 
             elif status in ['ACT', 'PEND']:
-                logger.info(f"Commit job {job_id} is still in progress. Waiting {delay} seconds before next check.")
+                logger.info(f"Commit job {job_id} is still in progress. Next check in {delay} seconds.")
                 time.sleep(delay)
             else:
-                logger.error(f"Commit job {job_id} failed or status is unknown.")
-                return False
+                logger.error(f"Commit job {job_id} failed or status is unknown. No retry.")
+                return False, False
 
-        logger.error(f"Maximum retries reached for commit job {job_id} status check without all devices completing.")
-        return False
+        logger.error(f"Maximum retries reached for commit job {job_id} status check. No further retries.")
+        return False, False
 
     def update_panorama(self):
         # Disable SSL warnings
@@ -633,6 +779,24 @@ class UpdatePanorama:
 
         # # Set Template Variables
         self.set_base_variable(logger)
+
+        # # Set Untrust ethernet Interfaces variables
+        ethernet_count = 1
+        untrust_router = self.config['palo_alto']['panorama']['OutsideVirtualRouter']
+        untrust_ip_addr = '$untrust_ip'
+        untrust_loopback = '$bgp_untrust_loopback'
+        untrust_zone = self.untrust_zone
+        untrust_route_name = 'Untrust-to-Trust'
+        # # Set Trust ethernet Interfaces variables
+        trust_router = self.config['palo_alto']['panorama']['InsideVirtualRouter']
+        trust_ip_addr = '$trust_ip'
+        trust_ip_base = '$trust_secondary_ip'
+        trust_zone = self.trust_zone
+        trust_route_name = 'Trust-to-Untrust'
+        # # Send the set commands for interfaces and static routes
+        self.set_interface(logger, ethernet_count, untrust_router, untrust_ip_addr, untrust_loopback, untrust_zone, untrust_route_name, trust_ip_base, trust_router)
+        ethernet_count += 1
+        self.set_interface(logger, ethernet_count, trust_router, trust_ip_addr, trust_ip_base, trust_zone, trust_route_name, untrust_loopback, untrust_router)
 
         # Set Crypto Profiles and Settings
         self.set_ipsec_crypto_profile(logger)
